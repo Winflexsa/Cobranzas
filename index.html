@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Winflex Cobranzas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if (window['pdfjsLib']) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --border: #e5e7eb;
+    --text: #1f2937; --muted: #6b7280;
+    --accent: #0d6efd; --accent-dark: #0a58ca;
+    --ok: #16a34a; --warn: #f59e0b; --bad: #dc2626;
+    --row-hover: #f9fafb;
+    --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  #login { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .login-box { background: var(--card); padding: 32px; border-radius: 12px; box-shadow: var(--shadow); width: 320px; text-align: center; }
+  .login-box h1 { margin: 0 0 8px; font-size: 22px; color: var(--accent); }
+  .login-box p { margin: 0 0 20px; color: var(--muted); font-size: 13px; }
+  .login-box input { width: 100%; padding: 12px; font-size: 18px; text-align: center; border: 1px solid var(--border); border-radius: 8px; letter-spacing: 8px; margin-bottom: 12px; }
+  .login-box button { width: 100%; padding: 12px; background: var(--accent); color: #fff; border: 0; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .login-error { color: var(--bad); font-size: 12px; margin-top: 8px; }
+  #app { display: none; }
+  header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; gap: 16px; box-shadow: var(--shadow); }
+  header h1 { margin: 0; font-size: 18px; color: var(--accent); }
+  .user-badge { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .sync-status { font-size: 11px; color: var(--muted); padding: 4px 8px; border-radius: 6px; background: #f3f4f6; }
+  .sync-status.saving { background: #fef3c7; color: #92400e; }
+  .sync-status.error { background: #fee2e2; color: var(--bad); }
+  .sync-status.ok { background: #dcfce7; color: var(--ok); }
+  nav { background: var(--card); border-bottom: 1px solid var(--border); display: flex; padding: 0 20px; overflow-x: auto; }
+  nav button { background: none; border: 0; padding: 12px 16px; cursor: pointer; font-size: 14px; color: var(--muted); border-bottom: 3px solid transparent; font-weight: 500; white-space: nowrap; }
+  nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  nav button:hover { color: var(--text); }
+  main { padding: 20px; max-width: 1400px; margin: 0 auto; }
+  .tab { display: none; }
+  .tab.active { display: block; }
+  .card { background: var(--card); border-radius: 10px; box-shadow: var(--shadow); padding: 20px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 16px; font-size: 16px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+  .toolbar input, .toolbar select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: #fff; }
+  .btn { padding: 8px 14px; border: 0; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; background: var(--accent); color: #fff; }
+  .btn:hover { background: var(--accent-dark); }
+  .btn-secondary { background: #6b7280; }
+  .btn-secondary:hover { background: #4b5563; }
+  .btn-danger { background: var(--bad); }
+  .btn-success { background: var(--ok); }
+  .btn-sm { padding: 4px 8px; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table th, table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+  table th { background: #f9fafb; font-weight: 600; color: var(--muted); position: sticky; top: 0; }
+  table tr:hover { background: var(--row-hover); }
+  table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge-ok { background: #dcfce7; color: var(--ok); }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-bad { background: #fee2e2; color: var(--bad); }
+  .badge-grey { background: #f3f4f6; color: var(--muted); }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  .dot-ok { background: var(--ok); }
+  .dot-warn { background: var(--warn); }
+  .dot-bad { background: var(--bad); }
+  .dot-grey { background: #d1d5db; }
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat { background: var(--card); padding: 16px; border-radius: 10px; box-shadow: var(--shadow); border-left: 4px solid var(--accent); }
+  .stat.stat-ok { border-left-color: var(--ok); }
+  .stat.stat-warn { border-left-color: var(--warn); }
+  .stat.stat-bad { border-left-color: var(--bad); }
+  .stat .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .stat .value { font-size: 22px; font-weight: 700; }
+  .stat .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: none; align-items: center; justify-content: center; z-index: 500; padding: 20px; }
+  .modal-bg.show { display: flex; }
+  .modal { background: var(--card); border-radius: 12px; padding: 24px; max-width: 600px; width: 100%; max-height: 90vh; overflow-y: auto; }
+  .modal h3 { margin: 0 0 16px; }
+  .form-row { margin-bottom: 12px; }
+  .form-row label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+  .form-row input, .form-row select, .form-row textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; }
+  .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+  .preview-table { max-height: 400px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
+  .preview-table table { font-size: 12px; }
+  .preview-table input, .preview-table select { width: 100%; padding: 4px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; }
+  .upload-area { border: 2px dashed var(--border); border-radius: 10px; padding: 32px; text-align: center; color: var(--muted); cursor: pointer; background: #fafbfc; }
+  .upload-area:hover { border-color: var(--accent); background: #f0f7ff; }
+  .upload-area.dragover { border-color: var(--accent); background: #e0efff; }
+  .small-label { font-size: 11px; color: var(--muted); }
+  hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
+  @media (max-width: 700px) { .form-grid-2 { grid-template-columns: 1fr; } main { padding: 12px; } }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="login-box">
+    <h1>Winflex Cobranzas</h1>
+    <p>Ingresá tu PIN</p>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="4" autofocus>
+    <button onclick="checkPin()">Entrar</button>
+    <div id="loginError" class="login-error"></div>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <h1>Winflex Cobranzas</h1>
+    <span class="user-badge" id="userBadge"></span>
+    <span class="sync-status" id="syncStatus">●</span>
+  </header>
+  <nav>
+    <button class="active" data-tab="dashboard" onclick="setTab('dashboard')">Dashboard</button>
+    <button data-tab="comprobantes" onclick="setTab('comprobantes')">Comprobantes</button>
+    <button data-tab="clientes" onclick="setTab('clientes')">Clientes</button>
+    <button data-tab="importar" onclick="setTab('importar')">Importar</button>
+    <button data-tab="config" onclick="setTab('config')">Config</button>
+  </nav>
+  <main>
+    <section class="tab active" id="tab-dashboard">
+      <div class="stats-grid" id="statsGrid"></div>
+      <div class="card"><h2>Resumen por vendedor</h2><div id="vendedorSummary"></div></div>
+      <div class="card"><h2>Próximos vencimientos (15 días)</h2><div id="proximosVenc"></div></div>
+      <div class="card"><h2>Vencidos</h2><div id="vencidos"></div></div>
+    </section>
+    <section class="tab" id="tab-comprobantes">
+      <div class="card">
+        <div class="toolbar">
+          <input id="filtroComp" placeholder="Buscar nº, cliente..." oninput="renderComprobantes()">
+          <select id="filtroVendedor" onchange="renderComprobantes()"></select>
+          <select id="filtroEstado" onchange="renderComprobantes()">
+            <option value="">Todos los estados</option><option value="pendiente">Pendientes</option>
+            <option value="vencido">Vencidos</option><option value="proximo">Próx. 7 días</option>
+            <option value="cobrado">Cobrados</option><option value="parcial">Parciales</option>
+          </select>
+          <select id="filtroTipo" onchange="renderComprobantes()">
+            <option value="">Todos los tipos</option><option value="FC_A">FC A</option>
+            <option value="FC_B">FC B</option><option value="FC_C">FC C</option><option value="FC_X">FC X</option>
+          </select>
+          <button class="btn" onclick="openCompModal()">+ Nuevo</button>
+          <button class="btn btn-secondary" onclick="exportComprobantes()">Exportar XLSX</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th></th><th>Tipo</th><th>Número</th><th>Fecha</th><th>Cliente</th><th>Vendedor</th><th>Vto.</th><th class="num">Importe</th><th class="num">Saldo</th><th>Estado</th><th></th></tr></thead>
+            <tbody id="compBody"></tbody>
+          </table>
+        </div>
+        <div id="compTotales" style="margin-top:12px;font-size:13px"></div>
+      </div>
+    </section>
+    <section class="tab" id="tab-clientes">
+      <div class="card">
+        <div class="toolbar">
+          <input id="filtroCli" placeholder="Buscar..." oninput="renderClientes()">
+          <select id="filtroCliVendedor" onchange="renderClientes()"></select>
+          <button class="btn" onclick="openClienteModal()">+ Nuevo Cliente</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Código</th><th>Razón Social</th><th>CUIT</th><th>Vendedor</th><th>Cond.</th><th>Modo Vto.</th><th class="num">Saldo</th><th></th></tr></thead>
+            <tbody id="cliBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    <section class="tab" id="tab-importar">
+      <div class="card">
+        <h2>📄 Importar facturas oficiales (PDF)</h2>
+        <p class="small-label">Subí uno o varios PDFs de facturas (A/B/C). El sistema intenta extraer los datos; revisalos antes de confirmar.</p>
+        <div class="upload-area" id="pdfDrop" onclick="document.getElementById('pdfInput').click()">
+          <div style="font-size:28px">📄</div><div>Click o arrastrá los PDFs acá</div>
+        </div>
+        <input id="pdfInput" type="file" accept="application/pdf" multiple hidden onchange="handlePdfFiles(this.files)">
+        <div id="pdfPreview"></div>
+      </div>
+      <div class="card">
+        <h2>📊 Importar remitos (Excel)</h2>
+        <p class="small-label">Subí el Excel de remitos. Te pide mapear las columnas la primera vez.</p>
+        <div class="upload-area" id="xlsDrop" onclick="document.getElementById('xlsInput').click()">
+          <div style="font-size:28px">📊</div><div>Click o arrastrá el Excel acá</div>
+        </div>
+        <input id="xlsInput" type="file" accept=".xlsx,.xls,.csv" hidden onchange="handleXlsFile(this.files[0])">
+        <div id="xlsPreview"></div>
+      </div>
+    </section>
+    <section class="tab" id="tab-config">
+      <div class="card">
+        <h2>Configuración</h2>
+        <div class="form-row"><label>JSONBin – Bin ID</label><input id="cfgBinId" placeholder="ej: 6543abc..." onchange="saveConfig()"></div>
+        <div class="form-row"><label>JSONBin – Master Key</label><input id="cfgApiKey" placeholder="$2a$10$..." type="password" onchange="saveConfig()"></div>
+        <div class="form-row"><label>Mapeo de columnas Excel (se guarda al primer import)</label><textarea id="cfgMapeo" rows="4" readonly></textarea></div>
+        <div class="form-row">
+          <button class="btn" onclick="loadFromBin()">Recargar desde JSONBin</button>
+          <button class="btn btn-secondary" onclick="saveToBin()">Forzar guardado</button>
+          <button class="btn btn-secondary" onclick="exportBackup()">Backup JSON</button>
+          <button class="btn btn-secondary" onclick="document.getElementById('restoreInput').click()">Restaurar JSON</button>
+          <input type="file" id="restoreInput" accept=".json" hidden onchange="restoreBackup(this.files[0])">
+        </div>
+        <hr>
+        <div class="small-label">v1.0 — Esquema preparado para integración futura con app de Cheques (campos chequeIds[] reservados).</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal-bg" id="cliModalBg">
+  <div class="modal">
+    <h3 id="cliModalTitle">Nuevo Cliente</h3>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Código</label><input id="cliCodigo"></div>
+      <div class="form-row"><label>CUIT</label><input id="cliCuit"></div>
+    </div>
+    <div class="form-row"><label>Razón Social</label><input id="cliRazon"></div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Vendedor</label><select id="cliVendedor"><option>Enrique</option><option>Matías</option><option>Winflex</option><option>Vicente</option></select></div>
+      <div class="form-row"><label>Condición (días)</label><select id="cliCondicion"><option value="0">Contado</option><option value="15">15</option><option value="30">30</option><option value="45">45</option><option value="60">60</option><option value="90">90</option></select></div>
+    </div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Vencimiento se cuenta desde</label><select id="cliModo"><option value="factura">Fecha factura</option><option value="remito">Fecha remito (FC a remito)</option></select></div>
+      <div class="form-row"><label>Contacto / Email</label><input id="cliContacto"></div>
+    </div>
+    <div class="form-row"><label>Observaciones</label><textarea id="cliObs" rows="2"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="cliDelBtn" onclick="deleteCliente()" style="margin-right:auto;display:none">Eliminar</button>
+      <button class="btn btn-secondary" onclick="closeCliModal()">Cancelar</button>
+      <button class="btn" onclick="saveCliente()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="compModalBg">
+  <div class="modal">
+    <h3 id="compModalTitle">Nuevo Comprobante</h3>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Tipo</label><select id="compTipo"><option value="FC_A">Factura A</option><option value="FC_B">Factura B</option><option value="FC_C">Factura C</option><option value="FC_X">FC X</option></select></div>
+      <div class="form-row"><label>Cliente</label><select id="compCliente"></select></div>
+    </div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Pto. Venta</label><input id="compPtoVenta" placeholder="0001"></div>
+      <div class="form-row"><label>Número</label><input id="compNumero" placeholder="00012345"></div>
+    </div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Fecha Factura</label><input id="compFecha" type="date"></div>
+      <div class="form-row"><label>Fecha Remito (si FC a remito)</label><input id="compFechaRemito" type="date"></div>
+    </div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Importe</label><input id="compImporte" type="number" step="0.01" oninput="onImporteChange()"></div>
+      <div class="form-row"><label>Saldo pendiente</label><input id="compSaldo" type="number" step="0.01"></div>
+    </div>
+    <div class="form-row"><label>Observaciones</label><textarea id="compObs" rows="2"></textarea></div>
+    <div class="form-row" id="compVtoCalc" style="font-size:12px;color:var(--muted)"></div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="compDelBtn" onclick="deleteComp()" style="margin-right:auto;display:none">Eliminar</button>
+      <button class="btn btn-success" id="compPagoBtn" onclick="openPagoModal()" style="display:none">Registrar pago</button>
+      <button class="btn btn-secondary" onclick="closeCompModal()">Cancelar</button>
+      <button class="btn" onclick="saveComp()">Guardar</button>
+    </div>
+    <div id="compPagosList" style="margin-top:16px"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="pagoModalBg">
+  <div class="modal" style="max-width:420px">
+    <h3>Registrar pago</h3>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Fecha</label><input id="pagoFecha" type="date"></div>
+      <div class="form-row"><label>Importe</label><input id="pagoImporte" type="number" step="0.01"></div>
+    </div>
+    <div class="form-row"><label>Método</label><select id="pagoMetodo"><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="cheque">Cheque</option><option value="echeq">eCheq</option><option value="otro">Otro</option></select></div>
+    <div class="form-row"><label>Referencia / Nº cheque</label><input id="pagoRef"></div>
+    <div class="form-row"><label>Observaciones</label><input id="pagoObs"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closePagoModal()">Cancelar</button>
+      <button class="btn btn-success" onclick="savePago()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const PINS = { '1540': 'Matías', '3080': 'Jonathan', '0104': 'Mirta' };
+let currentUser = null;
+function checkPin() {
+  const pin = document.getElementById('pinInput').value;
+  if (PINS[pin]) {
+    currentUser = PINS[pin];
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('userBadge').textContent = currentUser;
+    init();
+  } else document.getElementById('loginError').textContent = 'PIN incorrecto';
+}
+document.getElementById('pinInput').addEventListener('keypress', e => { if (e.key === 'Enter') checkPin(); });
+
+const LS_KEY = 'winflex_cobranzas_v1';
+const CFG_KEY = 'winflex_cobranzas_cfg';
+let state = { clientes: [], comprobantes: [], meta: { version: 1 } };
+let config = { binId: '', apiKey: '', mapeoExcel: null };
+let _saving = false;
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+function loadLocal() {
+  try { const s = localStorage.getItem(LS_KEY); if (s) state = JSON.parse(s); } catch(e) {}
+  try { const c = localStorage.getItem(CFG_KEY); if (c) config = JSON.parse(c); } catch(e) {}
+}
+function saveLocal() { state.meta.lastUpdate = new Date().toISOString(); localStorage.setItem(LS_KEY, JSON.stringify(state)); }
+function saveConfig() {
+  config.binId = document.getElementById('cfgBinId').value.trim();
+  config.apiKey = document.getElementById('cfgApiKey').value.trim();
+  localStorage.setItem(CFG_KEY, JSON.stringify(config));
+  setSyncStatus('Config guardada', 'ok');
+}
+async function loadFromBin() {
+  if (!config.binId || !config.apiKey) { setSyncStatus('Falta JSONBin', 'error'); return; }
+  setSyncStatus('Cargando...', 'saving');
+  try {
+    const r = await fetch(`https://api.jsonbin.io/v3/b/${config.binId}/latest`, { headers: { 'X-Master-Key': config.apiKey } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if (data.record && data.record.clientes) { state = data.record; saveLocal(); renderAll(); setSyncStatus('Cargado OK', 'ok'); }
+  } catch(e) { setSyncStatus('Error: ' + e.message, 'error'); }
+}
+async function saveToBin() {
+  if (!config.binId || !config.apiKey) { saveLocal(); setSyncStatus('Solo local', 'error'); return; }
+  if (_saving) return;
+  _saving = true; setSyncStatus('Guardando...', 'saving');
+  try {
+    saveLocal();
+    const r = await fetch(`https://api.jsonbin.io/v3/b/${config.binId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Master-Key': config.apiKey },
+      body: JSON.stringify(state)
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    setSyncStatus('✓ Guardado', 'ok');
+  } catch(e) { setSyncStatus('Error: ' + e.message, 'error'); }
+  finally { _saving = false; }
+}
+function setSyncStatus(text, kind = '') {
+  const el = document.getElementById('syncStatus');
+  el.textContent = text; el.className = 'sync-status ' + kind;
+  if (kind === 'ok') setTimeout(() => { el.textContent = '●'; el.className = 'sync-status'; }, 2500);
+}
+
+function setTab(name) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.id === 'tab-' + name));
+  if (name === 'dashboard') renderDashboard();
+}
+
+function addDays(dateStr, days) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + Number(days || 0));
+  return d.toISOString().slice(0, 10);
+}
+function calcVencimiento(comp) {
+  const cli = state.clientes.find(c => c.id === comp.clienteId);
+  if (!cli) return comp.fecha;
+  const base = (cli.modoVencimiento === 'remito' && comp.fechaRemito) ? comp.fechaRemito : comp.fecha;
+  return addDays(base, cli.condicionDias);
+}
+function diasParaVencer(comp) {
+  const vto = calcVencimiento(comp); if (!vto) return null;
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  return Math.floor((new Date(vto + 'T00:00:00') - hoy) / 86400000);
+}
+function estadoComp(comp) {
+  if (comp.saldo != null && comp.saldo < 0.01) return 'cobrado';
+  if (comp.pagos && comp.pagos.length > 0 && comp.saldo > 0) return 'parcial';
+  const dias = diasParaVencer(comp);
+  if (dias === null) return 'pendiente';
+  if (dias < 0) return 'vencido';
+  if (dias <= 7) return 'proximo';
+  return 'pendiente';
+}
+function badgeEstado(e) {
+  const m = { cobrado:['badge-ok','Cobrado'], parcial:['badge-warn','Parcial'], vencido:['badge-bad','Vencido'], proximo:['badge-warn','Próx.'], pendiente:['badge-grey','Pendiente'] };
+  const [cls, txt] = m[e] || m.pendiente;
+  return `<span class="badge ${cls}">${txt}</span>`;
+}
+function dotEstado(e) {
+  const m = { cobrado:'dot-grey', vencido:'dot-bad', proximo:'dot-warn', parcial:'dot-warn', pendiente:'dot-ok' };
+  return `<span class="dot ${m[e] || 'dot-grey'}"></span>`;
+}
+function fmtMoney(n) { if (n == null || isNaN(n)) return '–'; return new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n); }
+function fmtDate(d) { if (!d) return '–'; const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; }
+
+let editingCliId = null;
+function openClienteModal(id) {
+  editingCliId = id || null;
+  const c = id ? state.clientes.find(x => x.id === id) : null;
+  document.getElementById('cliModalTitle').textContent = id ? 'Editar Cliente' : 'Nuevo Cliente';
+  document.getElementById('cliCodigo').value = c?.codigo || '';
+  document.getElementById('cliCuit').value = c?.cuit || '';
+  document.getElementById('cliRazon').value = c?.razonSocial || '';
+  document.getElementById('cliVendedor').value = c?.vendedor || 'Matías';
+  document.getElementById('cliCondicion').value = c?.condicionDias ?? 30;
+  document.getElementById('cliModo').value = c?.modoVencimiento || 'factura';
+  document.getElementById('cliContacto').value = c?.contacto || '';
+  document.getElementById('cliObs').value = c?.obs || '';
+  document.getElementById('cliDelBtn').style.display = id ? '' : 'none';
+  document.getElementById('cliModalBg').classList.add('show');
+}
+function closeCliModal() { document.getElementById('cliModalBg').classList.remove('show'); }
+function saveCliente() {
+  const data = {
+    codigo: document.getElementById('cliCodigo').value.trim(),
+    cuit: document.getElementById('cliCuit').value.trim(),
+    razonSocial: document.getElementById('cliRazon').value.trim(),
+    vendedor: document.getElementById('cliVendedor').value,
+    condicionDias: Number(document.getElementById('cliCondicion').value),
+    modoVencimiento: document.getElementById('cliModo').value,
+    contacto: document.getElementById('cliContacto').value.trim(),
+    obs: document.getElementById('cliObs').value.trim()
+  };
+  if (!data.razonSocial) { alert('Falta razón social'); return; }
+  if (editingCliId) Object.assign(state.clientes.find(x => x.id === editingCliId), data, { updatedAt: new Date().toISOString() });
+  else state.clientes.push({ id: uid(), ...data, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+  closeCliModal(); saveToBin(); renderAll();
+}
+function deleteCliente() {
+  if (!editingCliId) return;
+  if (state.comprobantes.some(c => c.clienteId === editingCliId)) { alert('Este cliente tiene comprobantes cargados.'); return; }
+  if (!confirm('¿Eliminar cliente?')) return;
+  state.clientes = state.clientes.filter(c => c.id !== editingCliId);
+  closeCliModal(); saveToBin(); renderAll();
+}
+function renderClientes() {
+  const q = (document.getElementById('filtroCli').value || '').toLowerCase();
+  const vend = document.getElementById('filtroCliVendedor').value;
+  const filtered = state.clientes.filter(c => {
+    if (vend && c.vendedor !== vend) return false;
+    if (!q) return true;
+    return (c.razonSocial + ' ' + c.codigo + ' ' + (c.cuit||'')).toLowerCase().includes(q);
+  }).sort((a,b) => a.razonSocial.localeCompare(b.razonSocial));
+  document.getElementById('cliBody').innerHTML = filtered.map(c => {
+    const saldo = state.comprobantes.filter(x => x.clienteId === c.id).reduce((s,x) => s + (x.saldo || 0), 0);
+    return `<tr onclick="openClienteModal('${c.id}')" style="cursor:pointer">
+      <td>${c.codigo || '–'}</td><td>${c.razonSocial}</td><td>${c.cuit || '–'}</td>
+      <td>${c.vendedor}</td><td>${c.condicionDias === 0 ? 'Contado' : c.condicionDias + 'd'}</td>
+      <td>${c.modoVencimiento === 'remito' ? 'Remito' : 'Factura'}</td><td class="num">${fmtMoney(saldo)}</td>
+      <td><button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();openClienteModal('${c.id}')">Editar</button></td>
+    </tr>`;
+  }).join('');
+}
+
+let editingCompId = null;
+function openCompModal(id) {
+  editingCompId = id || null;
+  const c = id ? state.comprobantes.find(x => x.id === id) : null;
+  document.getElementById('compModalTitle').textContent = id ? 'Editar Comprobante' : 'Nuevo Comprobante';
+  const sel = document.getElementById('compCliente');
+  sel.innerHTML = '<option value="">-- Seleccionar --</option>' + state.clientes
+    .sort((a,b) => a.razonSocial.localeCompare(b.razonSocial))
+    .map(cl => `<option value="${cl.id}">${cl.razonSocial}${cl.codigo ? ' ('+cl.codigo+')' : ''}</option>`).join('');
+  document.getElementById('compTipo').value = c?.tipo || 'FC_A';
+  document.getElementById('compCliente').value = c?.clienteId || '';
+  document.getElementById('compPtoVenta').value = c?.ptoVenta || '';
+  document.getElementById('compNumero').value = c?.numero || '';
+  document.getElementById('compFecha').value = c?.fecha || new Date().toISOString().slice(0,10);
+  document.getElementById('compFechaRemito').value = c?.fechaRemito || '';
+  document.getElementById('compImporte').value = c?.importe ?? '';
+  document.getElementById('compSaldo').value = c?.saldo ?? (c?.importe ?? '');
+  document.getElementById('compObs').value = c?.obs || '';
+  document.getElementById('compDelBtn').style.display = id ? '' : 'none';
+  document.getElementById('compPagoBtn').style.display = id ? '' : 'none';
+  updateCompVtoCalc(); renderPagosInModal(c);
+  document.getElementById('compCliente').onchange = updateCompVtoCalc;
+  document.getElementById('compFecha').onchange = updateCompVtoCalc;
+  document.getElementById('compFechaRemito').onchange = updateCompVtoCalc;
+  document.getElementById('compModalBg').classList.add('show');
+}
+function closeCompModal() { document.getElementById('compModalBg').classList.remove('show'); }
+function onImporteChange() { if (!editingCompId) document.getElementById('compSaldo').value = document.getElementById('compImporte').value; }
+function updateCompVtoCalc() {
+  const cli = state.clientes.find(c => c.id === document.getElementById('compCliente').value);
+  const fecha = document.getElementById('compFecha').value;
+  const fechaR = document.getElementById('compFechaRemito').value;
+  const div = document.getElementById('compVtoCalc');
+  if (!cli || !fecha) { div.textContent = ''; return; }
+  const base = (cli.modoVencimiento === 'remito' && fechaR) ? fechaR : fecha;
+  const vto = addDays(base, cli.condicionDias);
+  div.innerHTML = `Vencimiento calculado: <b>${fmtDate(vto)}</b> (${cli.condicionDias}d desde ${cli.modoVencimiento === 'remito' ? 'remito' : 'factura'})`;
+}
+function renderPagosInModal(comp) {
+  const div = document.getElementById('compPagosList');
+  if (!comp || !comp.pagos || comp.pagos.length === 0) { div.innerHTML = comp ? '<div class="small-label">Sin pagos registrados</div>' : ''; return; }
+  div.innerHTML = '<b style="font-size:12px">Pagos:</b><table style="margin-top:6px"><thead><tr><th>Fecha</th><th>Método</th><th>Ref</th><th class="num">Importe</th><th></th></tr></thead><tbody>' +
+    comp.pagos.map((p,i) => `<tr><td>${fmtDate(p.fecha)}</td><td>${p.metodo}</td><td>${p.ref || '–'}</td><td class="num">${fmtMoney(p.importe)}</td><td><button class="btn btn-sm btn-danger" onclick="removePago(${i})">×</button></td></tr>`).join('') + '</tbody></table>';
+}
+function removePago(idx) {
+  if (!editingCompId || !confirm('¿Eliminar este pago?')) return;
+  const c = state.comprobantes.find(x => x.id === editingCompId);
+  const p = c.pagos[idx]; c.pagos.splice(idx, 1);
+  c.saldo = (c.saldo || 0) + (p.importe || 0);
+  document.getElementById('compSaldo').value = c.saldo;
+  renderPagosInModal(c); saveToBin();
+}
+function saveComp() {
+  const data = {
+    tipo: document.getElementById('compTipo').value,
+    clienteId: document.getElementById('compCliente').value,
+    ptoVenta: document.getElementById('compPtoVenta').value.trim(),
+    numero: document.getElementById('compNumero').value.trim(),
+    fecha: document.getElementById('compFecha').value,
+    fechaRemito: document.getElementById('compFechaRemito').value || null,
+    importe: parseFloat(document.getElementById('compImporte').value) || 0,
+    saldo: parseFloat(document.getElementById('compSaldo').value) || 0,
+    obs: document.getElementById('compObs').value.trim()
+  };
+  if (!data.clienteId) { alert('Falta cliente'); return; }
+  if (!data.fecha) { alert('Falta fecha'); return; }
+  if (editingCompId) Object.assign(state.comprobantes.find(x => x.id === editingCompId), data, { updatedAt: new Date().toISOString() });
+  else state.comprobantes.push({ id: uid(), ...data, pagos: [], chequeIds: [], cobranzaIds: [], origenImport: { tipo: 'manual', importedAt: new Date().toISOString() }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+  closeCompModal(); saveToBin(); renderAll();
+}
+function deleteComp() {
+  if (!editingCompId || !confirm('¿Eliminar comprobante?')) return;
+  state.comprobantes = state.comprobantes.filter(c => c.id !== editingCompId);
+  closeCompModal(); saveToBin(); renderAll();
+}
+function renderComprobantes() {
+  const q = (document.getElementById('filtroComp').value || '').toLowerCase();
+  const vend = document.getElementById('filtroVendedor').value;
+  const est = document.getElementById('filtroEstado').value;
+  const tipo = document.getElementById('filtroTipo').value;
+  const cliMap = Object.fromEntries(state.clientes.map(c => [c.id, c]));
+  const enriched = state.comprobantes.map(c => ({ ...c, _cliente: cliMap[c.clienteId], _vto: calcVencimiento(c), _estado: estadoComp(c) }));
+  const filtered = enriched.filter(c => {
+    if (c._cliente && vend && c._cliente.vendedor !== vend) return false;
+    if (est && c._estado !== est) return false;
+    if (tipo && c.tipo !== tipo) return false;
+    if (!q) return true;
+    return ((c.numero || '') + ' ' + (c._cliente?.razonSocial || '')).toLowerCase().includes(q);
+  }).sort((a,b) => (a._vto || '').localeCompare(b._vto || ''));
+  document.getElementById('compBody').innerHTML = filtered.map(c => `<tr onclick="openCompModal('${c.id}')" style="cursor:pointer">
+    <td>${dotEstado(c._estado)}</td><td><span class="badge badge-grey">${c.tipo.replace('FC_','')}</span></td>
+    <td>${c.ptoVenta ? c.ptoVenta + '-' : ''}${c.numero || '–'}</td><td>${fmtDate(c.fecha)}</td>
+    <td>${c._cliente?.razonSocial || '?'}</td><td>${c._cliente?.vendedor || '–'}</td>
+    <td>${fmtDate(c._vto)}</td><td class="num">${fmtMoney(c.importe)}</td>
+    <td class="num">${fmtMoney(c.saldo)}</td><td>${badgeEstado(c._estado)}</td>
+    <td><button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();openCompModal('${c.id}')">Ver</button></td>
+  </tr>`).join('');
+  const totalImp = filtered.reduce((s,c) => s + (c.importe || 0), 0);
+  const totalSaldo = filtered.reduce((s,c) => s + (c.saldo || 0), 0);
+  document.getElementById('compTotales').innerHTML = `<b>${filtered.length}</b> comprobantes · Importe total: <b>${fmtMoney(totalImp)}</b> · Saldo pendiente: <b>${fmtMoney(totalSaldo)}</b>`;
+}
+
+function openPagoModal() {
+  document.getElementById('pagoFecha').value = new Date().toISOString().slice(0,10);
+  document.getElementById('pagoImporte').value = document.getElementById('compSaldo').value;
+  document.getElementById('pagoMetodo').value = 'transferencia';
+  document.getElementById('pagoRef').value = ''; document.getElementById('pagoObs').value = '';
+  document.getElementById('pagoModalBg').classList.add('show');
+}
+function closePagoModal() { document.getElementById('pagoModalBg').classList.remove('show'); }
+function savePago() {
+  if (!editingCompId) return;
+  const importe = parseFloat(document.getElementById('pagoImporte').value);
+  if (!importe || importe <= 0) { alert('Importe inválido'); return; }
+  const c = state.comprobantes.find(x => x.id === editingCompId);
+  c.pagos = c.pagos || [];
+  c.pagos.push({
+    fecha: document.getElementById('pagoFecha').value, importe,
+    metodo: document.getElementById('pagoMetodo').value,
+    ref: document.getElementById('pagoRef').value.trim(),
+    obs: document.getElementById('pagoObs').value.trim(), chequeId: null
+  });
+  c.saldo = Math.max(0, (c.saldo || 0) - importe);
+  c.updatedAt = new Date().toISOString();
+  document.getElementById('compSaldo').value = c.saldo;
+  closePagoModal(); renderPagosInModal(c); saveToBin();
+}
+
+function renderDashboard() {
+  const cliMap = Object.fromEntries(state.clientes.map(c => [c.id, c]));
+  const all = state.comprobantes.map(c => ({ ...c, _cli: cliMap[c.clienteId], _estado: estadoComp(c), _vto: calcVencimiento(c) }));
+  const pend = all.filter(c => c._estado !== 'cobrado');
+  const totalPend = pend.reduce((s,c) => s + (c.saldo || 0), 0);
+  const vencidos = pend.filter(c => c._estado === 'vencido');
+  const proximos = pend.filter(c => c._estado === 'proximo');
+  const hoy = new Date();
+  const cobradoMes = all.reduce((s,c) => s + (c.pagos || []).reduce((s2,p) => {
+    const d = new Date(p.fecha);
+    return (d.getMonth() === hoy.getMonth() && d.getFullYear() === hoy.getFullYear()) ? s2 + p.importe : s2;
+  }, 0), 0);
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat stat-bad"><div class="label">Vencidos</div><div class="value">${fmtMoney(vencidos.reduce((s,c) => s + c.saldo, 0))}</div><div class="sub">${vencidos.length} comprobantes</div></div>
+    <div class="stat stat-warn"><div class="label">Vence en 7 días</div><div class="value">${fmtMoney(proximos.reduce((s,c) => s + c.saldo, 0))}</div><div class="sub">${proximos.length} comprobantes</div></div>
+    <div class="stat"><div class="label">Total a cobrar</div><div class="value">${fmtMoney(totalPend)}</div><div class="sub">${pend.length} comprobantes</div></div>
+    <div class="stat stat-ok"><div class="label">Cobrado este mes</div><div class="value">${fmtMoney(cobradoMes)}</div><div class="sub">Mes en curso</div></div>`;
+  const byVend = {};
+  pend.forEach(c => {
+    const v = c._cli?.vendedor || '?';
+    if (!byVend[v]) byVend[v] = { total: 0, vencido: 0, cant: 0 };
+    byVend[v].total += c.saldo || 0; byVend[v].cant += 1;
+    if (c._estado === 'vencido') byVend[v].vencido += c.saldo || 0;
+  });
+  document.getElementById('vendedorSummary').innerHTML = Object.keys(byVend).length === 0 ? '<div class="small-label">Sin datos</div>' :
+    '<table><thead><tr><th>Vendedor</th><th class="num">Comprob.</th><th class="num">A cobrar</th><th class="num">Vencido</th></tr></thead><tbody>' +
+    Object.entries(byVend).sort((a,b) => b[1].total - a[1].total).map(([v,d]) =>
+      `<tr><td><b>${v}</b></td><td class="num">${d.cant}</td><td class="num">${fmtMoney(d.total)}</td><td class="num" style="color:${d.vencido > 0 ? 'var(--bad)' : 'inherit'}">${fmtMoney(d.vencido)}</td></tr>`
+    ).join('') + '</tbody></table>';
+  const px = pend.filter(c => { const d = diasParaVencer(c); return d !== null && d >= 0 && d <= 15; }).sort((a,b) => (a._vto || '').localeCompare(b._vto || ''));
+  document.getElementById('proximosVenc').innerHTML = px.length === 0 ? '<div class="small-label">Nada en los próximos 15 días</div>' :
+    '<table><thead><tr><th>Vto.</th><th>Cliente</th><th>Vendedor</th><th>Comp.</th><th class="num">Saldo</th></tr></thead><tbody>' +
+    px.map(c => `<tr onclick="openCompModal('${c.id}')" style="cursor:pointer"><td>${fmtDate(c._vto)} <span class="small-label">(${diasParaVencer(c)}d)</span></td><td>${c._cli?.razonSocial || '?'}</td><td>${c._cli?.vendedor || '–'}</td><td>${c.tipo.replace('FC_','')} ${c.ptoVenta||''}-${c.numero||''}</td><td class="num">${fmtMoney(c.saldo)}</td></tr>`).join('') + '</tbody></table>';
+  const venc = pend.filter(c => c._estado === 'vencido').sort((a,b) => (a._vto || '').localeCompare(b._vto || ''));
+  document.getElementById('vencidos').innerHTML = venc.length === 0 ? '<div class="small-label">Sin vencidos 🎉</div>' :
+    '<table><thead><tr><th>Vto.</th><th>Días vencido</th><th>Cliente</th><th>Vendedor</th><th>Comp.</th><th class="num">Saldo</th></tr></thead><tbody>' +
+    venc.map(c => `<tr onclick="openCompModal('${c.id}')" style="cursor:pointer"><td>${fmtDate(c._vto)}</td><td><span class="badge badge-bad">${-diasParaVencer(c)}d</span></td><td>${c._cli?.razonSocial || '?'}</td><td>${c._cli?.vendedor || '–'}</td><td>${c.tipo.replace('FC_','')} ${c.ptoVenta||''}-${c.numero||''}</td><td class="num">${fmtMoney(c.saldo)}</td></tr>`).join('') + '</tbody></table>';
+}
+
+let pendingPdfImports = [];
+async function handlePdfFiles(files) {
+  if (!files || files.length === 0) return;
+  pendingPdfImports = [];
+  document.getElementById('pdfPreview').innerHTML = '<div class="small-label">Procesando ' + files.length + ' archivo(s)...</div>';
+  for (const f of files) {
+    try { const parsed = await parsePdf(f); pendingPdfImports.push({ filename: f.name, ...parsed }); }
+    catch (e) { pendingPdfImports.push({ filename: f.name, error: e.message }); }
+  }
+  renderPdfPreview();
+}
+async function parsePdf(file) {
+  const arrayBuf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+  let fullText = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const txt = await page.getTextContent();
+    fullText += txt.items.map(it => it.str).join(' ') + '\n';
+  }
+  return extractFacturaFields(fullText);
+}
+function extractFacturaFields(text) {
+  const out = {};
+  const tipoM = text.match(/FACTURA\s+([ABCEM])\b/i);
+  out.tipo = tipoM ? 'FC_' + tipoM[1].toUpperCase() : 'FC_A';
+  const nroM = text.match(/(\d{4,5})\s*[-–]\s*(\d{7,8})/);
+  if (nroM) { out.ptoVenta = nroM[1].padStart(4,'0'); out.numero = nroM[2].padStart(8,'0'); }
+  const fechaM = text.match(/Fecha\s+(?:de\s+)?Emisi[oó]n\s*[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
+  if (fechaM) out.fecha = toIsoDate(fechaM[1]);
+  else { const anyDate = text.match(/(\d{1,2}\/\d{1,2}\/\d{4})/); if (anyDate) out.fecha = toIsoDate(anyDate[1]); }
+  const cuits = [...text.matchAll(/\b(\d{2}-?\d{8}-?\d)\b/g)].map(m => m[1].replace(/-/g, ''));
+  if (cuits.length >= 2) out.cuit = cuits[1].replace(/(\d{2})(\d{8})(\d)/, '$1-$2-$3');
+  const totM = text.match(/Importe\s+Total\s*[:\s]*\$?\s*([\d.,]+)/i) || text.match(/TOTAL\s*\$?\s*([\d.,]+)/i);
+  if (totM) out.importe = parseArMoney(totM[1]);
+  return out;
+}
+function toIsoDate(s) {
+  const m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (!m) return '';
+  let [_, d, mo, y] = m; if (y.length === 2) y = '20' + y;
+  return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;
+}
+function parseArMoney(s) { if (!s) return 0; return parseFloat(String(s).replace(/\./g, '').replace(',', '.')) || 0; }
+function renderPdfPreview() {
+  const preview = document.getElementById('pdfPreview');
+  if (pendingPdfImports.length === 0) { preview.innerHTML = ''; return; }
+  const cliOpts = '<option value="">-- Cliente --</option>' + state.clientes.sort((a,b) => a.razonSocial.localeCompare(b.razonSocial)).map(c => `<option value="${c.id}">${c.razonSocial}</option>`).join('');
+  preview.innerHTML = `<h3 style="margin:16px 0 8px">Revisá antes de importar</h3><div class="preview-table"><table>
+    <thead><tr><th>Archivo</th><th>Tipo</th><th>Nº</th><th>Fecha</th><th>CUIT</th><th>Importe</th><th>Cliente</th><th></th></tr></thead>
+    <tbody>${pendingPdfImports.map((p,i) => p.error
+      ? `<tr><td>${p.filename}</td><td colspan="6" style="color:var(--bad)">${p.error}</td><td><button class="btn btn-sm btn-danger" onclick="removePdfImport(${i})">×</button></td></tr>`
+      : `<tr><td><span class="small-label">${p.filename}</span></td>
+          <td><select onchange="pendingPdfImports[${i}].tipo=this.value">${['FC_A','FC_B','FC_C','FC_X'].map(t => `<option value="${t}" ${t===p.tipo?'selected':''}>${t.replace('FC_','')}</option>`).join('')}</select></td>
+          <td><input value="${(p.ptoVenta||'')+'-'+(p.numero||'')}" onchange="pendingPdfImports[${i}]._nrocombo=this.value"></td>
+          <td><input type="date" value="${p.fecha||''}" onchange="pendingPdfImports[${i}].fecha=this.value"></td>
+          <td><input value="${p.cuit||''}" onchange="pendingPdfImports[${i}].cuit=this.value"></td>
+          <td><input type="number" step="0.01" value="${p.importe||0}" onchange="pendingPdfImports[${i}].importe=parseFloat(this.value)"></td>
+          <td><select onchange="pendingPdfImports[${i}].clienteId=this.value">${cliOpts.replace(`value="${guessClienteByCuit(p.cuit)}"`, `value="${guessClienteByCuit(p.cuit)}" selected`)}</select></td>
+          <td><button class="btn btn-sm btn-danger" onclick="removePdfImport(${i})">×</button></td>
+        </tr>`).join('')}</tbody></table></div>
+    <div style="margin-top:12px"><button class="btn btn-success" onclick="confirmPdfImport()">Importar ${pendingPdfImports.filter(p=>!p.error).length}</button>
+    <button class="btn btn-secondary" onclick="pendingPdfImports=[];renderPdfPreview()">Cancelar</button></div>`;
+}
+function guessClienteByCuit(cuit) {
+  if (!cuit) return '';
+  const clean = cuit.replace(/-/g, '');
+  const c = state.clientes.find(x => (x.cuit || '').replace(/-/g, '') === clean);
+  return c ? c.id : '';
+}
+function removePdfImport(idx) { pendingPdfImports.splice(idx, 1); renderPdfPreview(); }
+function confirmPdfImport() {
+  let n = 0;
+  pendingPdfImports.forEach(p => {
+    if (p.error || !p.clienteId) return;
+    const combo = p._nrocombo || ((p.ptoVenta||'') + '-' + (p.numero||''));
+    const [pv, nro] = combo.split('-');
+    state.comprobantes.push({
+      id: uid(), tipo: p.tipo || 'FC_A', clienteId: p.clienteId,
+      ptoVenta: (pv || '').trim(), numero: (nro || '').trim(),
+      fecha: p.fecha || new Date().toISOString().slice(0,10), fechaRemito: null,
+      importe: p.importe || 0, saldo: p.importe || 0,
+      pagos: [], chequeIds: [], cobranzaIds: [],
+      origenImport: { tipo: 'pdf', archivoNombre: p.filename, importedAt: new Date().toISOString() },
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    });
+    n++;
+  });
+  pendingPdfImports = []; renderPdfPreview();
+  alert(`Importadas ${n} facturas`); saveToBin(); renderAll();
+}
+
+let pendingXlsImports = null;
+async function handleXlsFile(file) {
+  if (!file) return;
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+  if (rows.length < 2) { alert('Excel vacío'); return; }
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    if (rows[i].filter(x => x !== '' && x != null).length >= 3) { headerIdx = i; break; }
+  }
+  const headers = rows[headerIdx].map((h,i) => String(h || `col${i}`).trim());
+  const dataRows = rows.slice(headerIdx + 1).filter(r => r.some(x => x !== '' && x != null));
+  pendingXlsImports = { headers, rows: dataRows, mapping: config.mapeoExcel || autoMapeo(headers), filename: file.name };
+  renderXlsPreview();
+}
+function autoMapeo(headers) {
+  const m = {}; const norm = h => h.toLowerCase().replace(/[\s_\.]/g, '');
+  headers.forEach(h => {
+    const n = norm(h);
+    if (!m.codigo && /(cod|cuenta|codclie)/i.test(n)) m.codigo = h;
+    else if (!m.razon && /(raz|cliente|nombre)/i.test(n)) m.razon = h;
+    else if (!m.numero && /(num|comp|fact|nro)/i.test(n)) m.numero = h;
+    else if (!m.fecha && /(fec|emit)/i.test(n)) m.fecha = h;
+    else if (!m.fechaRemito && /(remito|envio)/i.test(n)) m.fechaRemito = h;
+    else if (!m.importe && /(tot|importe|monto)/i.test(n)) m.importe = h;
+    else if (!m.cuit && /cuit/i.test(n)) m.cuit = h;
+  });
+  return m;
+}
+function renderXlsPreview() {
+  const div = document.getElementById('xlsPreview');
+  if (!pendingXlsImports) { div.innerHTML = ''; return; }
+  const { headers, rows, mapping } = pendingXlsImports;
+  const fields = [['codigo','Código cliente'],['cuit','CUIT'],['razon','Razón social'],['numero','Nº comprobante'],['fecha','Fecha'],['fechaRemito','Fecha remito'],['importe','Importe']];
+  const headerOpts = ['<option value="">--</option>'].concat(headers.map(h => `<option value="${h}">${h}</option>`)).join('');
+  div.innerHTML = `<h3 style="margin:16px 0 8px">Mapear columnas</h3><div class="form-grid-2">
+    ${fields.map(([k, label]) => `<div class="form-row"><label>${label}</label><select onchange="pendingXlsImports.mapping['${k}']=this.value">${headerOpts.replace(`value="${mapping[k]||''}"`, `value="${mapping[k]||''}" selected`)}</select></div>`).join('')}
+    </div><div class="small-label" style="margin-bottom:8px">Vista previa (5 filas). Clientes desconocidos se crean automáticamente.</div>
+    <div class="preview-table"><table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+    <tbody>${rows.slice(0,5).map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <div style="margin-top:12px"><button class="btn btn-success" onclick="confirmXlsImport()">Importar ${rows.length} filas</button>
+    <button class="btn btn-secondary" onclick="pendingXlsImports=null;renderXlsPreview()">Cancelar</button></div>`;
+}
+function confirmXlsImport() {
+  const { headers, rows, mapping, filename } = pendingXlsImports;
+  config.mapeoExcel = mapping;
+  localStorage.setItem(CFG_KEY, JSON.stringify(config));
+  document.getElementById('cfgMapeo').value = JSON.stringify(mapping, null, 2);
+  let importados = 0, nuevosClientes = 0, omitidos = 0;
+  const colIdx = {};
+  Object.keys(mapping).forEach(k => { if (mapping[k]) colIdx[k] = headers.indexOf(mapping[k]); });
+  rows.forEach(row => {
+    const get = k => colIdx[k] != null && colIdx[k] >= 0 ? row[colIdx[k]] : '';
+    const razon = String(get('razon') || '').trim();
+    const codigo = String(get('codigo') || '').trim();
+    const cuit = String(get('cuit') || '').trim();
+    if (!razon && !codigo && !cuit) { omitidos++; return; }
+    let cli = state.clientes.find(c =>
+      (cuit && (c.cuit||'').replace(/-/g,'') === cuit.replace(/-/g,'')) ||
+      (codigo && c.codigo === codigo) ||
+      (razon && c.razonSocial.toLowerCase() === razon.toLowerCase()));
+    if (!cli) {
+      cli = { id: uid(), codigo, cuit, razonSocial: razon || codigo || 'Sin nombre', vendedor: 'Winflex', condicionDias: 30, modoVencimiento: 'factura', contacto: '', obs: 'Auto-creado por import Excel', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      state.clientes.push(cli); nuevosClientes++;
+    }
+    const importe = parseArMoney(String(get('importe') || '0'));
+    state.comprobantes.push({
+      id: uid(), tipo: 'FC_X', clienteId: cli.id, ptoVenta: '',
+      numero: String(get('numero') || '').trim(),
+      fecha: parseFechaCell(get('fecha')) || new Date().toISOString().slice(0,10),
+      fechaRemito: parseFechaCell(get('fechaRemito')) || null,
+      importe, saldo: importe, pagos: [], chequeIds: [], cobranzaIds: [],
+      origenImport: { tipo: 'excel', archivoNombre: filename, importedAt: new Date().toISOString() },
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    });
+    importados++;
+  });
+  pendingXlsImports = null; renderXlsPreview();
+  alert(`Importados: ${importados}\nClientes nuevos: ${nuevosClientes}\nOmitidos: ${omitidos}`);
+  saveToBin(); renderAll();
+}
+function parseFechaCell(v) {
+  if (!v) return ''; if (v instanceof Date) return v.toISOString().slice(0,10);
+  const s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(s)) return toIsoDate(s);
+  const n = Number(s);
+  if (!isNaN(n) && n > 25569 && n < 60000) return new Date((n - 25569) * 86400 * 1000).toISOString().slice(0,10);
+  return '';
+}
+
+function exportComprobantes() {
+  const cliMap = Object.fromEntries(state.clientes.map(c => [c.id, c]));
+  const data = state.comprobantes.map(c => {
+    const cli = cliMap[c.clienteId];
+    return { Tipo: c.tipo.replace('FC_',''), PtoVenta: c.ptoVenta, Numero: c.numero, Fecha: c.fecha,
+      FechaRemito: c.fechaRemito || '', Cliente: cli?.razonSocial || '', CUIT: cli?.cuit || '',
+      Vendedor: cli?.vendedor || '', CondDias: cli?.condicionDias || '', Vencimiento: calcVencimiento(c),
+      Importe: c.importe, Saldo: c.saldo, Estado: estadoComp(c), Observaciones: c.obs || '' };
+  });
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Comprobantes');
+  XLSX.writeFile(wb, `cobranzas_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob); const a = document.createElement('a');
+  a.href = url; a.download = `cobranzas_backup_${new Date().toISOString().slice(0,10)}.json`; a.click();
+  URL.revokeObjectURL(url);
+}
+async function restoreBackup(file) {
+  if (!file || !confirm('Reemplaza todos los datos. ¿Continuar?')) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (!data.clientes || !data.comprobantes) throw new Error('Formato inválido');
+    state = data; saveLocal(); renderAll(); saveToBin(); alert('Restaurado OK');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+function renderAll() {
+  const vendOpts = '<option value="">Todos los vendedores</option>' + ['Enrique','Matías','Winflex','Vicente'].map(v => `<option value="${v}">${v}</option>`).join('');
+  document.getElementById('filtroVendedor').innerHTML = vendOpts;
+  document.getElementById('filtroCliVendedor').innerHTML = vendOpts;
+  renderClientes(); renderComprobantes(); renderDashboard();
+}
+function init() {
+  loadLocal();
+  document.getElementById('cfgBinId').value = config.binId || '';
+  document.getElementById('cfgApiKey').value = config.apiKey || '';
+  document.getElementById('cfgMapeo').value = config.mapeoExcel ? JSON.stringify(config.mapeoExcel, null, 2) : '';
+  renderAll();
+  if (config.binId && config.apiKey) loadFromBin();
+  const pdfDrop = document.getElementById('pdfDrop');
+  ['dragenter','dragover'].forEach(ev => pdfDrop.addEventListener(ev, e => { e.preventDefault(); pdfDrop.classList.add('dragover'); }));
+  ['dragleave','drop'].forEach(ev => pdfDrop.addEventListener(ev, e => { e.preventDefault(); pdfDrop.classList.remove('dragover'); }));
+  pdfDrop.addEventListener('drop', e => { e.preventDefault(); handlePdfFiles(e.dataTransfer.files); });
+  const xlsDrop = document.getElementById('xlsDrop');
+  ['dragenter','dragover'].forEach(ev => xlsDrop.addEventListener(ev, e => { e.preventDefault(); xlsDrop.classList.add('dragover'); }));
+  ['dragleave','drop'].forEach(ev => xlsDrop.addEventListener(ev, e => { e.preventDefault(); xlsDrop.classList.remove('dragover'); }));
+  xlsDrop.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files[0]) handleXlsFile(e.dataTransfer.files[0]); });
+}
+</script>
+</body>
+</html>
