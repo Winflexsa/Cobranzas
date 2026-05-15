@@ -98,6 +98,27 @@
   hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
   .section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin: 16px 0 8px; font-weight: 600; }
   .override-badge { display: inline-block; margin-left: 4px; padding: 1px 6px; background: #fef3c7; color: #92400e; border-radius: 4px; font-size: 10px; font-weight: 600; }
+  .pago-item { background: #f9fafb; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 8px; }
+  .pago-item-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .pago-item-tipo { font-weight: 600; font-size: 13px; }
+  .pago-item-tipo.cheque { color: #7c3aed; }
+  .pago-item-tipo.echeq { color: #6366f1; }
+  .pago-item-tipo.transferencia { color: #0891b2; }
+  .pago-item-tipo.efectivo { color: var(--ok); }
+  .pago-item-tipo.otro { color: var(--muted); }
+  .pago-item .form-row { margin-bottom: 8px; }
+  .pago-item input, .pago-item select, .pago-item textarea { font-size: 12px; padding: 6px 8px; }
+  .money-preview { font-size: 11px; color: var(--accent); font-weight: 500; margin-top: 2px; }
+  .pago-summary { font-size: 11px; color: var(--muted); }
+  .pago-summary .chip { display: inline-block; padding: 1px 6px; margin-right: 4px; background: #e5e7eb; border-radius: 8px; font-weight: 600; font-size: 10px; }
+  .alert-banner { padding: 10px 16px; margin: 0; display: none; }
+  .alert-banner.show { display: block; }
+  .alert-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; margin-bottom: 6px; font-size: 13px; }
+  .alert-row:last-child { margin-bottom: 0; }
+  .alert-row.bad { background: #fee2e2; color: #991b1b; border-left: 4px solid var(--bad); }
+  .alert-row.warn { background: #fef3c7; color: #92400e; border-left: 4px solid var(--warn); }
+  .alert-row .alert-action { margin-left: auto; }
+  .nav-badge { display: inline-block; min-width: 18px; padding: 1px 5px; margin-left: 4px; background: var(--bad); color: #fff; border-radius: 9px; font-size: 10px; font-weight: 700; }
   @media (max-width: 700px) { .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; } main { padding: 12px; } }
 </style>
 </head>
@@ -126,9 +147,14 @@
     <button data-tab="importar" onclick="setTab('importar')">Importar</button>
     <button data-tab="config" onclick="setTab('config')">Config</button>
   </nav>
+  <div class="alert-banner" id="alertBanner"></div>
   <main>
     <section class="tab active" id="tab-dashboard">
       <div class="stats-grid" id="statsGrid"></div>
+      <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="enviarResumenEmail()">📧 Enviar resumen por email</button>
+        <button class="btn btn-secondary" onclick="previewResumenEmail()">Vista previa</button>
+      </div>
       <div class="card"><h2>Resumen por vendedor</h2><div id="vendedorSummary"></div></div>
       <div class="card"><h2>Próximos vencimientos (15 días)</h2><div id="proximosVenc"></div></div>
       <div class="card"><h2>Vencidos</h2><div id="vencidos"></div></div>
@@ -199,6 +225,7 @@
         <h2>Configuración</h2>
         <div class="form-row"><label>JSONBin – Bin ID</label><input id="cfgBinId" placeholder="ej: 6543abc..." onchange="saveConfig()"></div>
         <div class="form-row"><label>JSONBin – Master Key</label><input id="cfgApiKey" placeholder="$2a$10$..." type="password" onchange="saveConfig()"></div>
+        <div class="form-row"><label>Emails destinatarios del resumen (separados por coma)</label><input id="cfgEmails" placeholder="matias@winflex.com.ar, mirta@winflex.com.ar" onchange="saveConfig()"></div>
         <div class="form-row"><label>Mapeo de columnas Excel (se guarda al primer import)</label><textarea id="cfgMapeo" rows="4" readonly></textarea></div>
         <div class="form-row">
           <button class="btn" onclick="loadFromBin()">Recargar desde JSONBin</button>
@@ -208,7 +235,7 @@
           <input type="file" id="restoreInput" accept=".json" hidden onchange="restoreBackup(this.files[0])">
         </div>
         <hr>
-        <div class="small-label">v1.1 — Soporte de condiciones duales por cliente (FC A/B/C vs FC X) con override por comprobante.</div>
+        <div class="small-label">v1.2 — Alertas in-app + resumen por email. Modal de pago con instrumentos múltiples.</div>
       </div>
     </section>
   </main>
@@ -288,18 +315,41 @@
 </div>
 
 <div class="modal-bg" id="pagoModalBg">
-  <div class="modal" style="max-width:420px">
-    <h3>Registrar pago</h3>
-    <div class="form-grid-2">
-      <div class="form-row"><label>Fecha</label><input id="pagoFecha" type="date"></div>
-      <div class="form-row"><label>Importe</label><input id="pagoImporte" type="number" step="0.01"></div>
+  <div class="modal" style="max-width:760px">
+    <h3 id="pagoModalTitle">Registrar pago</h3>
+    <div class="form-grid-3">
+      <div class="form-row">
+        <label>Fecha del pago</label>
+        <input id="pagoFecha" type="date">
+      </div>
+      <div class="form-row">
+        <label>Nº de Recibo</label>
+        <input id="pagoNumeroRecibo" placeholder="REC-001">
+      </div>
+      <div class="form-row">
+        <label>Saldo pendiente de la FC</label>
+        <input id="pagoSaldoFc" type="number" readonly style="background:#f9fafb">
+      </div>
     </div>
-    <div class="form-row"><label>Método</label><select id="pagoMetodo"><option value="efectivo">Efectivo</option><option value="transferencia">Transferencia</option><option value="cheque">Cheque</option><option value="echeq">eCheq</option><option value="otro">Otro</option></select></div>
-    <div class="form-row"><label>Referencia / Nº cheque</label><input id="pagoRef"></div>
-    <div class="form-row"><label>Observaciones</label><input id="pagoObs"></div>
+
+    <div class="section-title">Instrumentos de pago<span id="pagoTotalDisplay" style="float:right;color:var(--accent);text-transform:none;font-size:14px"></span></div>
+    <div id="pagoItemsList"></div>
+    <div style="display:flex;gap:6px;margin:10px 0;flex-wrap:wrap">
+      <button type="button" class="btn btn-sm btn-secondary" onclick="addPagoItem('cheque')">+ Cheque</button>
+      <button type="button" class="btn btn-sm btn-secondary" onclick="addPagoItem('echeq')">+ eCheq</button>
+      <button type="button" class="btn btn-sm btn-secondary" onclick="addPagoItem('transferencia')">+ Transferencia</button>
+      <button type="button" class="btn btn-sm btn-secondary" onclick="addPagoItem('efectivo')">+ Efectivo</button>
+      <button type="button" class="btn btn-sm btn-secondary" onclick="addPagoItem('otro')">+ Otro</button>
+    </div>
+
+    <div class="form-row">
+      <label>Observaciones generales del pago</label>
+      <textarea id="pagoObs" rows="2"></textarea>
+    </div>
+
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closePagoModal()">Cancelar</button>
-      <button class="btn btn-success" onclick="savePago()">Registrar</button>
+      <button class="btn btn-success" onclick="savePago()">Guardar pago</button>
     </div>
   </div>
 </div>
@@ -322,7 +372,7 @@ document.getElementById('pinInput').addEventListener('keypress', e => { if (e.ke
 const LS_KEY = 'winflex_cobranzas_v1';
 const CFG_KEY = 'winflex_cobranzas_cfg';
 let state = { clientes: [], comprobantes: [], meta: { version: 1 } };
-let config = { binId: '', apiKey: '', mapeoExcel: null };
+let config = { binId: '', apiKey: '', mapeoExcel: null, emails: '' };
 let _saving = false;
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 
@@ -334,6 +384,7 @@ function saveLocal() { state.meta.lastUpdate = new Date().toISOString(); localSt
 function saveConfig() {
   config.binId = document.getElementById('cfgBinId').value.trim();
   config.apiKey = document.getElementById('cfgApiKey').value.trim();
+  config.emails = document.getElementById('cfgEmails').value.trim();
   localStorage.setItem(CFG_KEY, JSON.stringify(config));
   setSyncStatus('Config guardada', 'ok');
 }
@@ -448,7 +499,25 @@ function dotEstado(e) {
   const m = { cobrado:'dot-grey', vencido:'dot-bad', proximo:'dot-warn', parcial:'dot-warn', pendiente:'dot-ok' };
   return `<span class="dot ${m[e] || 'dot-grey'}"></span>`;
 }
-function fmtMoney(n) { if (n == null || isNaN(n)) return '–'; return new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n); }
+function fmtMoney(n) {
+  if (n == null || isNaN(n)) return '–';
+  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+function fmtMoneyPlain(n) {
+  if (n == null || isNaN(n)) return '';
+  return new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+function attachMoneyPreview(inputId, previewId) {
+  const inp = document.getElementById(inputId);
+  const prev = document.getElementById(previewId);
+  if (!inp || !prev) return;
+  const update = () => {
+    const v = parseFloat(inp.value);
+    prev.textContent = (!isNaN(v) && v !== 0) ? fmtMoney(v) : '';
+  };
+  inp.oninput = () => { update(); if (inp.dataset.oldInput) eval(inp.dataset.oldInput); };
+  update();
+}
 function fmtDate(d) { if (!d) return '–'; const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; }
 
 let editingCliId = null;
@@ -576,20 +645,6 @@ function updateCompVtoCalc() {
   div.innerHTML = `Vencimiento calculado: <b>${fmtDate(vto)}</b> · ${cond.dias}d desde ${cond.modo === 'remito' ? 'remito' : 'factura'}${origenTxt}`;
 }
 
-function renderPagosInModal(comp) {
-  const div = document.getElementById('compPagosList');
-  if (!comp || !comp.pagos || comp.pagos.length === 0) { div.innerHTML = comp ? '<div class="small-label">Sin pagos registrados</div>' : ''; return; }
-  div.innerHTML = '<b style="font-size:12px">Pagos:</b><table style="margin-top:6px"><thead><tr><th>Fecha</th><th>Método</th><th>Ref</th><th class="num">Importe</th><th></th></tr></thead><tbody>' +
-    comp.pagos.map((p,i) => `<tr><td>${fmtDate(p.fecha)}</td><td>${p.metodo}</td><td>${p.ref || '–'}</td><td class="num">${fmtMoney(p.importe)}</td><td><button class="btn btn-sm btn-danger" onclick="removePago(${i})">×</button></td></tr>`).join('') + '</tbody></table>';
-}
-function removePago(idx) {
-  if (!editingCompId || !confirm('¿Eliminar este pago?')) return;
-  const c = state.comprobantes.find(x => x.id === editingCompId);
-  const p = c.pagos[idx]; c.pagos.splice(idx, 1);
-  c.saldo = (c.saldo || 0) + (p.importe || 0);
-  document.getElementById('compSaldo').value = c.saldo;
-  renderPagosInModal(c); saveToBin();
-}
 function saveComp() {
   const condOv = document.getElementById('compCondOverride').value;
   const modoOv = document.getElementById('compModoOverride').value;
@@ -645,30 +700,212 @@ function renderComprobantes() {
   document.getElementById('compTotales').innerHTML = `<b>${filtered.length}</b> comprobantes · Importe total: <b>${fmtMoney(totalImp)}</b> · Saldo pendiente: <b>${fmtMoney(totalSaldo)}</b>`;
 }
 
+// ============================================================
+// PAGOS — Modal con instrumentos múltiples (cheques, echeqs, transfer, efectivo, otro)
+// ============================================================
+let currentPagoItems = [];
+
+const PAGO_TIPO_LABELS = {
+  cheque: '🧾 Cheque',
+  echeq: '💳 eCheq',
+  transferencia: '🏦 Transferencia',
+  efectivo: '💵 Efectivo',
+  otro: '📎 Otro'
+};
+
 function openPagoModal() {
+  if (!editingCompId) return;
+  const c = state.comprobantes.find(x => x.id === editingCompId);
+  currentPagoItems = [];
   document.getElementById('pagoFecha').value = new Date().toISOString().slice(0,10);
-  document.getElementById('pagoImporte').value = document.getElementById('compSaldo').value;
-  document.getElementById('pagoMetodo').value = 'transferencia';
-  document.getElementById('pagoRef').value = ''; document.getElementById('pagoObs').value = '';
+  document.getElementById('pagoNumeroRecibo').value = '';
+  document.getElementById('pagoSaldoFc').value = c?.saldo || 0;
+  document.getElementById('pagoObs').value = '';
+  renderPagoItems();
   document.getElementById('pagoModalBg').classList.add('show');
 }
-function closePagoModal() { document.getElementById('pagoModalBg').classList.remove('show'); }
+function closePagoModal() {
+  document.getElementById('pagoModalBg').classList.remove('show');
+  currentPagoItems = [];
+}
+
+function addPagoItem(tipo) {
+  const c = state.comprobantes.find(x => x.id === editingCompId);
+  // Si es el primer item, pre-llenar con el saldo de la FC
+  const isFirst = currentPagoItems.length === 0;
+  const item = { _id: uid(), tipo, monto: isFirst ? (c?.saldo || 0) : 0 };
+  if (tipo === 'cheque' || tipo === 'echeq') {
+    item.numero = ''; item.banco = ''; item.fechaEmision = ''; item.fechaCobro = ''; item.librador = ''; item.obs = '';
+  } else if (tipo === 'transferencia') {
+    item.numeroOp = ''; item.bancoOrigen = ''; item.bancoDestino = ''; item.fechaAcreditacion = ''; item.obs = '';
+  } else if (tipo === 'efectivo') {
+    item.obs = '';
+  } else {
+    item.descripcion = ''; item.obs = '';
+  }
+  currentPagoItems.push(item);
+  renderPagoItems();
+}
+
+function removePagoItem(itemId) {
+  currentPagoItems = currentPagoItems.filter(it => it._id !== itemId);
+  renderPagoItems();
+}
+
+function updatePagoItemField(itemId, field, value) {
+  const it = currentPagoItems.find(x => x._id === itemId);
+  if (!it) return;
+  if (field === 'monto') value = parseFloat(value) || 0;
+  it[field] = value;
+  updatePagoTotal();
+}
+
+function renderPagoItems() {
+  const list = document.getElementById('pagoItemsList');
+  if (currentPagoItems.length === 0) {
+    list.innerHTML = '<div class="small-label" style="padding:12px;background:#f9fafb;border-radius:8px;text-align:center">Sin instrumentos cargados. Agregá uno con los botones de abajo.</div>';
+    updatePagoTotal();
+    return;
+  }
+  list.innerHTML = currentPagoItems.map((it, idx) => {
+    const cls = it.tipo;
+    const label = PAGO_TIPO_LABELS[it.tipo] || it.tipo;
+    let body = '';
+    if (it.tipo === 'cheque' || it.tipo === 'echeq') {
+      body = `<div class="form-grid-2">
+        <div class="form-row"><label>Monto</label>
+          <input type="number" step="0.01" value="${it.monto || ''}" oninput="updatePagoItemField('${it._id}','monto',this.value)">
+          <div class="money-preview">${it.monto ? fmtMoney(it.monto) : ''}</div>
+        </div>
+        <div class="form-row"><label>Número de ${it.tipo === 'echeq' ? 'eCheq' : 'cheque'}</label><input value="${it.numero || ''}" oninput="updatePagoItemField('${it._id}','numero',this.value)"></div>
+        <div class="form-row"><label>Banco</label><input value="${it.banco || ''}" oninput="updatePagoItemField('${it._id}','banco',this.value)" placeholder="Galicia, Patagonia..."></div>
+        <div class="form-row"><label>Librador / Titular</label><input value="${it.librador || ''}" oninput="updatePagoItemField('${it._id}','librador',this.value)"></div>
+        <div class="form-row"><label>Fecha emisión</label><input type="date" value="${it.fechaEmision || ''}" oninput="updatePagoItemField('${it._id}','fechaEmision',this.value)"></div>
+        <div class="form-row"><label>Fecha de cobro / pago</label><input type="date" value="${it.fechaCobro || ''}" oninput="updatePagoItemField('${it._id}','fechaCobro',this.value)"></div>
+      </div>
+      <div class="form-row"><label>Observaciones</label><input value="${it.obs || ''}" oninput="updatePagoItemField('${it._id}','obs',this.value)"></div>`;
+    } else if (it.tipo === 'transferencia') {
+      body = `<div class="form-grid-2">
+        <div class="form-row"><label>Monto</label>
+          <input type="number" step="0.01" value="${it.monto || ''}" oninput="updatePagoItemField('${it._id}','monto',this.value)">
+          <div class="money-preview">${it.monto ? fmtMoney(it.monto) : ''}</div>
+        </div>
+        <div class="form-row"><label>Nº Operación</label><input value="${it.numeroOp || ''}" oninput="updatePagoItemField('${it._id}','numeroOp',this.value)"></div>
+        <div class="form-row"><label>Banco origen (del cliente)</label><input value="${it.bancoOrigen || ''}" oninput="updatePagoItemField('${it._id}','bancoOrigen',this.value)"></div>
+        <div class="form-row"><label>Banco destino (Winflex)</label><input value="${it.bancoDestino || ''}" oninput="updatePagoItemField('${it._id}','bancoDestino',this.value)"></div>
+        <div class="form-row"><label>Fecha acreditación</label><input type="date" value="${it.fechaAcreditacion || ''}" oninput="updatePagoItemField('${it._id}','fechaAcreditacion',this.value)"></div>
+      </div>
+      <div class="form-row"><label>Observaciones</label><input value="${it.obs || ''}" oninput="updatePagoItemField('${it._id}','obs',this.value)"></div>`;
+    } else if (it.tipo === 'efectivo') {
+      body = `<div class="form-grid-2">
+        <div class="form-row"><label>Monto</label>
+          <input type="number" step="0.01" value="${it.monto || ''}" oninput="updatePagoItemField('${it._id}','monto',this.value)">
+          <div class="money-preview">${it.monto ? fmtMoney(it.monto) : ''}</div>
+        </div>
+        <div class="form-row"><label>Observaciones</label><input value="${it.obs || ''}" oninput="updatePagoItemField('${it._id}','obs',this.value)"></div>
+      </div>`;
+    } else {
+      body = `<div class="form-grid-2">
+        <div class="form-row"><label>Monto</label>
+          <input type="number" step="0.01" value="${it.monto || ''}" oninput="updatePagoItemField('${it._id}','monto',this.value)">
+          <div class="money-preview">${it.monto ? fmtMoney(it.monto) : ''}</div>
+        </div>
+        <div class="form-row"><label>Descripción</label><input value="${it.descripcion || ''}" oninput="updatePagoItemField('${it._id}','descripcion',this.value)" placeholder="Compensación, débito, etc."></div>
+      </div>
+      <div class="form-row"><label>Observaciones</label><input value="${it.obs || ''}" oninput="updatePagoItemField('${it._id}','obs',this.value)"></div>`;
+    }
+    return `<div class="pago-item">
+      <div class="pago-item-header">
+        <span class="pago-item-tipo ${cls}">${label} #${idx + 1}</span>
+        <button class="btn btn-sm btn-danger" onclick="removePagoItem('${it._id}')">Quitar</button>
+      </div>
+      ${body}
+    </div>`;
+  }).join('');
+  updatePagoTotal();
+}
+
+function updatePagoTotal() {
+  const total = currentPagoItems.reduce((s, it) => s + (parseFloat(it.monto) || 0), 0);
+  const saldoFc = parseFloat(document.getElementById('pagoSaldoFc').value) || 0;
+  const display = document.getElementById('pagoTotalDisplay');
+  if (total === 0) { display.textContent = ''; return; }
+  let txt = `Total: ${fmtMoney(total)}`;
+  if (total > saldoFc + 0.01) txt += ` ⚠ ($${(total - saldoFc).toFixed(2)} sobrante)`;
+  else if (total < saldoFc - 0.01) txt += ` (pago parcial, queda ${fmtMoney(saldoFc - total)})`;
+  else txt += ' ✓ cancela el saldo';
+  display.textContent = txt;
+}
+
 function savePago() {
   if (!editingCompId) return;
-  const importe = parseFloat(document.getElementById('pagoImporte').value);
-  if (!importe || importe <= 0) { alert('Importe inválido'); return; }
+  if (currentPagoItems.length === 0) { alert('Agregá al menos un instrumento de pago'); return; }
+  const total = currentPagoItems.reduce((s, it) => s + (parseFloat(it.monto) || 0), 0);
+  if (total <= 0) { alert('El total del pago debe ser mayor a 0'); return; }
   const c = state.comprobantes.find(x => x.id === editingCompId);
   c.pagos = c.pagos || [];
-  c.pagos.push({
-    fecha: document.getElementById('pagoFecha').value, importe,
-    metodo: document.getElementById('pagoMetodo').value,
-    ref: document.getElementById('pagoRef').value.trim(),
-    obs: document.getElementById('pagoObs').value.trim(), chequeId: null
+  // Limpiar _id internos antes de guardar
+  const items = currentPagoItems.map(it => {
+    const clean = { ...it };
+    delete clean._id;
+    return clean;
   });
-  c.saldo = Math.max(0, (c.saldo || 0) - importe);
+  const pago = {
+    id: uid(),
+    fecha: document.getElementById('pagoFecha').value,
+    numeroRecibo: document.getElementById('pagoNumeroRecibo').value.trim(),
+    obs: document.getElementById('pagoObs').value.trim(),
+    importe: total,
+    items,
+    chequeIds: [],   // futuro: link a app Cheques
+    createdAt: new Date().toISOString()
+  };
+  c.pagos.push(pago);
+  c.saldo = Math.max(0, (c.saldo || 0) - total);
   c.updatedAt = new Date().toISOString();
   document.getElementById('compSaldo').value = c.saldo;
-  closePagoModal(); renderPagosInModal(c); saveToBin();
+  closePagoModal();
+  renderPagosInModal(c);
+  saveToBin();
+}
+
+function removePago(idx) {
+  if (!editingCompId || !confirm('¿Eliminar este pago?')) return;
+  const c = state.comprobantes.find(x => x.id === editingCompId);
+  const p = c.pagos[idx];
+  c.pagos.splice(idx, 1);
+  c.saldo = (c.saldo || 0) + (p.importe || 0);
+  document.getElementById('compSaldo').value = c.saldo;
+  renderPagosInModal(c);
+  saveToBin();
+}
+
+function summaryPagoItems(pago) {
+  // Cuenta items por tipo
+  if (!pago.items || pago.items.length === 0) {
+    // Formato viejo (legacy)
+    return pago.metodo || '–';
+  }
+  const counts = {};
+  pago.items.forEach(it => { counts[it.tipo] = (counts[it.tipo] || 0) + 1; });
+  return Object.entries(counts).map(([t, n]) => `<span class="chip">${n}× ${PAGO_TIPO_LABELS[t] || t}</span>`).join('');
+}
+
+function renderPagosInModal(comp) {
+  const div = document.getElementById('compPagosList');
+  if (!comp || !comp.pagos || comp.pagos.length === 0) {
+    div.innerHTML = comp ? '<div class="small-label">Sin pagos registrados</div>' : '';
+    return;
+  }
+  div.innerHTML = '<b style="font-size:12px">Pagos registrados:</b>' +
+    '<table style="margin-top:6px"><thead><tr><th>Fecha</th><th>Nº Recibo</th><th>Instrumentos</th><th class="num">Importe</th><th></th></tr></thead><tbody>' +
+    comp.pagos.map((p, i) => `<tr>
+      <td>${fmtDate(p.fecha)}</td>
+      <td>${p.numeroRecibo || '–'}</td>
+      <td><div class="pago-summary">${summaryPagoItems(p)}</div></td>
+      <td class="num">${fmtMoney(p.importe || 0)}</td>
+      <td><button class="btn btn-sm btn-danger" onclick="removePago(${i})">×</button></td>
+    </tr>`).join('') + '</tbody></table>';
 }
 
 function renderDashboard() {
@@ -1063,11 +1300,184 @@ function renderAll() {
   document.getElementById('filtroVendedor').innerHTML = vendOpts;
   document.getElementById('filtroCliVendedor').innerHTML = vendOpts;
   renderClientes(); renderComprobantes(); renderDashboard();
+  renderAlertBanner(); updateNavBadges();
+}
+
+// ============================================================
+// ALERTAS — Banner in-app + nav badges
+// ============================================================
+function getAlertasData() {
+  const cliMap = Object.fromEntries(state.clientes.map(c => [c.id, c]));
+  const all = state.comprobantes.map(c => ({ ...c, _cli: cliMap[c.clienteId], _estado: estadoComp(c), _vto: calcVencimiento(c) }));
+  return {
+    vencidos: all.filter(c => c._estado === 'vencido'),
+    proximos: all.filter(c => c._estado === 'proximo'),
+    pendientes: all.filter(c => c._estado !== 'cobrado'),
+    todos: all
+  };
+}
+
+function renderAlertBanner() {
+  const banner = document.getElementById('alertBanner');
+  // Si el usuario lo cerró en esta sesión, no lo mostramos
+  if (sessionStorage.getItem('alertDismissed') === '1') {
+    banner.classList.remove('show'); return;
+  }
+  const { vencidos, proximos } = getAlertasData();
+  if (vencidos.length === 0 && proximos.length === 0) {
+    banner.classList.remove('show'); return;
+  }
+  let html = '';
+  if (vencidos.length > 0) {
+    const total = vencidos.reduce((s,c) => s + (c.saldo || 0), 0);
+    html += `<div class="alert-row bad">
+      🔴 <b>${vencidos.length} comprobante${vencidos.length > 1 ? 's' : ''} vencido${vencidos.length > 1 ? 's' : ''}</b> · ${fmtMoney(total)}
+      <span class="alert-action">
+        <button class="btn btn-sm" onclick="setTab('comprobantes');document.getElementById('filtroEstado').value='vencido';renderComprobantes();">Ver</button>
+      </span>
+    </div>`;
+  }
+  if (proximos.length > 0) {
+    const total = proximos.reduce((s,c) => s + (c.saldo || 0), 0);
+    html += `<div class="alert-row warn">
+      🟡 <b>${proximos.length} comprobante${proximos.length > 1 ? 's' : ''} vence${proximos.length > 1 ? 'n' : ''} en 7 días</b> · ${fmtMoney(total)}
+      <span class="alert-action">
+        <button class="btn btn-sm" onclick="setTab('comprobantes');document.getElementById('filtroEstado').value='proximo';renderComprobantes();">Ver</button>
+      </span>
+    </div>`;
+  }
+  html += `<div style="text-align:right;margin-top:4px"><a href="#" onclick="event.preventDefault();sessionStorage.setItem('alertDismissed','1');document.getElementById('alertBanner').classList.remove('show')" class="small-label">Ocultar hasta recargar</a></div>`;
+  banner.innerHTML = html;
+  banner.classList.add('show');
+}
+
+function updateNavBadges() {
+  const { vencidos } = getAlertasData();
+  const btn = document.querySelector('nav button[data-tab="comprobantes"]');
+  if (btn) {
+    btn.innerHTML = 'Comprobantes' + (vencidos.length > 0 ? ` <span class="nav-badge">${vencidos.length}</span>` : '');
+  }
+}
+
+// ============================================================
+// RESUMEN POR EMAIL
+// ============================================================
+function generarResumenTexto() {
+  const { vencidos, proximos, pendientes, todos } = getAlertasData();
+  const hoy = new Date();
+  const fechaStr = hoy.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  const totalVenc = vencidos.reduce((s,c) => s + (c.saldo || 0), 0);
+  const totalProx = proximos.reduce((s,c) => s + (c.saldo || 0), 0);
+  const totalPend = pendientes.reduce((s,c) => s + (c.saldo || 0), 0);
+  const cobradoMes = todos.reduce((s,c) => s + (c.pagos || []).reduce((s2,p) => {
+    const d = new Date(p.fecha);
+    return (d.getMonth() === hoy.getMonth() && d.getFullYear() === hoy.getFullYear()) ? s2 + (p.importe || 0) : s2;
+  }, 0), 0);
+
+  let txt = `RESUMEN COBRANZAS WINFLEX\n`;
+  txt += `Generado: ${fechaStr}\n`;
+  txt += `${'='.repeat(50)}\n\n`;
+
+  txt += `TOTAL A COBRAR:        ${fmtMoney(totalPend).padStart(20)}   (${pendientes.length} comp.)\n`;
+  txt += `VENCIDO:               ${fmtMoney(totalVenc).padStart(20)}   (${vencidos.length} comp.)\n`;
+  txt += `VENCE EN 7 DIAS:       ${fmtMoney(totalProx).padStart(20)}   (${proximos.length} comp.)\n`;
+  txt += `COBRADO ESTE MES:      ${fmtMoney(cobradoMes).padStart(20)}\n\n`;
+
+  // Por vendedor
+  const byVend = {};
+  pendientes.forEach(c => {
+    const v = c._cli?.vendedor || '?';
+    if (!byVend[v]) byVend[v] = { total: 0, vencido: 0, cant: 0 };
+    byVend[v].total += c.saldo || 0;
+    byVend[v].cant++;
+    if (c._estado === 'vencido') byVend[v].vencido += c.saldo || 0;
+  });
+  if (Object.keys(byVend).length > 0) {
+    txt += `POR VENDEDOR\n${'-'.repeat(50)}\n`;
+    Object.entries(byVend).sort((a,b) => b[1].total - a[1].total).forEach(([v, d]) => {
+      txt += `${v.padEnd(12)} ${d.cant.toString().padStart(3)} comp.   A cobrar: ${fmtMoney(d.total).padStart(18)}`;
+      if (d.vencido > 0) txt += `   Vencido: ${fmtMoney(d.vencido)}`;
+      txt += '\n';
+    });
+    txt += '\n';
+  }
+
+  // Detalle vencidos
+  if (vencidos.length > 0) {
+    txt += `VENCIDOS (${vencidos.length})\n${'-'.repeat(50)}\n`;
+    vencidos.sort((a,b) => (a._vto || '').localeCompare(b._vto || '')).forEach(c => {
+      const diasVenc = -diasParaVencer(c);
+      const cliente = (c._cli?.razonSocial || '?').substring(0, 30);
+      const tipo = c.tipo.replace('FC_','');
+      const nro = (c.ptoVenta ? c.ptoVenta + '-' : '') + (c.numero || '');
+      txt += `${fmtDate(c._vto)} (${diasVenc}d) | ${cliente.padEnd(30)} | ${tipo} ${nro.padEnd(15)} | ${fmtMoney(c.saldo)}\n`;
+    });
+    txt += '\n';
+  }
+
+  // Detalle próximos
+  if (proximos.length > 0) {
+    txt += `VENCEN EN 7 DIAS (${proximos.length})\n${'-'.repeat(50)}\n`;
+    proximos.sort((a,b) => (a._vto || '').localeCompare(b._vto || '')).forEach(c => {
+      const diasFalt = diasParaVencer(c);
+      const cliente = (c._cli?.razonSocial || '?').substring(0, 30);
+      const tipo = c.tipo.replace('FC_','');
+      const nro = (c.ptoVenta ? c.ptoVenta + '-' : '') + (c.numero || '');
+      txt += `${fmtDate(c._vto)} (${diasFalt}d) | ${cliente.padEnd(30)} | ${tipo} ${nro.padEnd(15)} | ${fmtMoney(c.saldo)}\n`;
+    });
+    txt += '\n';
+  }
+
+  txt += `${'='.repeat(50)}\n`;
+  txt += `Generado por Winflex Cobranzas — ${currentUser || ''}\n`;
+  return txt;
+}
+
+function previewResumenEmail() {
+  const texto = generarResumenTexto();
+  document.getElementById('resumenTexto').value = texto;
+  document.getElementById('resumenModalBg').classList.add('show');
+}
+
+function enviarResumenEmail() {
+  const texto = generarResumenTexto();
+  abrirMailto(texto);
+}
+
+function enviarResumenEmailDesdeModal() {
+  const texto = document.getElementById('resumenTexto').value;
+  abrirMailto(texto);
+}
+
+function abrirMailto(texto) {
+  const hoy = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const subject = `Resumen Cobranzas Winflex - ${hoy}`;
+  const to = (config.emails || '').split(',').map(s => s.trim()).filter(Boolean).join(',');
+  const mailto = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(texto)}`;
+  // mailto: tiene límite de ~2000 caracteres en algunos clientes.
+  if (mailto.length > 1800) {
+    if (!confirm('El resumen es muy largo y algunos clientes de email pueden truncarlo. ¿Continuar igualmente?\n\nAlternativa: usá el botón Copiar al portapapeles y pegalo en un nuevo email manualmente.')) return;
+  }
+  window.location.href = mailto;
+}
+
+function copiarResumen() {
+  const texto = document.getElementById('resumenTexto').value;
+  navigator.clipboard.writeText(texto).then(() => {
+    alert('Resumen copiado. Pegalo en un email nuevo.');
+  }).catch(() => {
+    // fallback
+    const ta = document.getElementById('resumenTexto');
+    ta.select(); document.execCommand('copy');
+    alert('Resumen copiado.');
+  });
 }
 function init() {
   loadLocal();
   document.getElementById('cfgBinId').value = config.binId || '';
   document.getElementById('cfgApiKey').value = config.apiKey || '';
+  document.getElementById('cfgEmails').value = config.emails || '';
   document.getElementById('cfgMapeo').value = config.mapeoExcel ? JSON.stringify(config.mapeoExcel, null, 2) : '';
   renderAll();
   if (config.binId && config.apiKey) loadFromBin();
@@ -1081,5 +1491,18 @@ function init() {
   xlsDrop.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files[0]) handleXlsFile(e.dataTransfer.files[0]); });
 }
 </script>
+<div class="modal-bg" id="resumenModalBg">
+  <div class="modal" style="max-width:700px">
+    <h3>Vista previa del resumen</h3>
+    <p class="small-label">Editá lo que quieras y después podés enviar por email o copiar al portapapeles.</p>
+    <textarea id="resumenTexto" rows="20" style="width:100%;font-family:'Courier New',monospace;font-size:12px;padding:10px;border:1px solid var(--border);border-radius:6px;background:#f9fafb"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="copiarResumen()">📋 Copiar al portapapeles</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('resumenModalBg').classList.remove('show')">Cerrar</button>
+      <button class="btn btn-success" onclick="enviarResumenEmailDesdeModal()">📧 Enviar por email</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
