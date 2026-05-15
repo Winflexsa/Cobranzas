@@ -730,21 +730,92 @@ async function parsePdf(file) {
     const txt = await page.getTextContent();
     fullText += txt.items.map(it => it.str).join(' ') + '\n';
   }
+  // Detección de PDF escaneado (sin texto extraíble)
+  if (fullText.trim().length < 30) {
+    throw new Error('PDF escaneado/imagen — cargar manualmente o aplicar OCR primero');
+  }
   return extractFacturaFields(fullText);
 }
 function extractFacturaFields(text) {
-  const out = {};
-  const tipoM = text.match(/FACTURA\s+([ABCEM])\b/i);
-  out.tipo = tipoM ? 'FC_' + tipoM[1].toUpperCase() : 'FC_A';
-  const nroM = text.match(/(\d{4,5})\s*[-–]\s*(\d{7,8})/);
-  if (nroM) { out.ptoVenta = nroM[1].padStart(4,'0'); out.numero = nroM[2].padStart(8,'0'); }
-  const fechaM = text.match(/Fecha\s+(?:de\s+)?Emisi[oó]n\s*[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
+  const out = { _rawText: text.substring(0, 500) };
+
+  // ---- TIPO ----
+  // Primero intentamos por código AFIP "Cód. N" (más confiable)
+  // 001/002/003=A, 006/007/008=B, 011/012/013=C, 019/020/021=E, 051/052/053=M
+  const codM = text.match(/C[oó]d\.?\s*0*([0-9]{1,3})\b/i);
+  if (codM) {
+    const codigo = parseInt(codM[1]);
+    const map = {1:'A',2:'A',3:'A',6:'B',7:'B',8:'B',11:'C',12:'C',13:'C',19:'E',20:'E',21:'E',51:'M',52:'M',53:'M'};
+    if (map[codigo]) out.tipo = 'FC_' + map[codigo];
+  }
+  // Fallback: buscar "FACT" o "FACTURA" + letra
+  if (!out.tipo) {
+    const tipoM = text.match(/FACT(?:URA)?(?:\s+ELECT(?:R[OÓ]NICA)?)?\s+([ABCEM])\b/i);
+    if (tipoM) out.tipo = 'FC_' + tipoM[1].toUpperCase();
+  }
+  if (!out.tipo) out.tipo = 'FC_A';
+
+  // ---- PTO VENTA - NÚMERO ----
+  // Formato 0004-00018325. Evitar que matchee CUITs (2 dígitos al inicio).
+  const nroM = text.match(/(?:N[°º]?\s*:?\s*)?(\d{4,5})\s*[-–]\s*(\d{7,8})\b/);
+  if (nroM) {
+    out.ptoVenta = nroM[1].padStart(4,'0');
+    out.numero = nroM[2].padStart(8,'0');
+  }
+
+  // ---- FECHA EMISIÓN ----
+  // Acepta dd/mm/yy o dd/mm/yyyy
+  let fechaM = text.match(/Fecha\s*(?:de\s+)?(?:Emisi[oó]n)?\s*:\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i);
   if (fechaM) out.fecha = toIsoDate(fechaM[1]);
-  else { const anyDate = text.match(/(\d{1,2}\/\d{1,2}\/\d{4})/); if (anyDate) out.fecha = toIsoDate(anyDate[1]); }
-  const cuits = [...text.matchAll(/\b(\d{2}-?\d{8}-?\d)\b/g)].map(m => m[1].replace(/-/g, ''));
-  if (cuits.length >= 2) out.cuit = cuits[1].replace(/(\d{2})(\d{8})(\d)/, '$1-$2-$3');
-  const totM = text.match(/Importe\s+Total\s*[:\s]*\$?\s*([\d.,]+)/i) || text.match(/TOTAL\s*\$?\s*([\d.,]+)/i);
+  else {
+    // Fallback: primera fecha que encuentre con dd/mm/yy o dd/mm/yyyy
+    const anyDate = text.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/);
+    if (anyDate) out.fecha = toIsoDate(anyDate[1]);
+  }
+
+  // ---- CUIT CLIENTE ----
+  // Los CUITs tienen formato XX-XXXXXXXX-X. Excluye teléfonos (formato distinto).
+  const cuits = [...text.matchAll(/\b(\d{2})[-\s]?(\d{8})[-\s]?(\d)\b/g)].map(m => `${m[1]}-${m[2]}-${m[3]}`);
+  // El primer CUIT suele ser el emisor (Winflex 30-61048777-3). El segundo, el cliente.
+  if (cuits.length >= 2) {
+    // Filtrar el CUIT de Winflex si aparece (por las dudas)
+    const clienteCuits = cuits.filter(c => !c.startsWith('30-61048777'));
+    out.cuit = clienteCuits.length > 0 ? clienteCuits[0] : cuits[1];
+  } else if (cuits.length === 1 && !cuits[0].startsWith('30-61048777')) {
+    out.cuit = cuits[0];
+  }
+
+  // ---- CÓDIGO INTERNO DE CLIENTE (Tango) ----
+  // En las FC de Winflex aparece como "Cliente: 2023" cerca del CUIT
+  const cliCodM = text.match(/Cliente\s*:?\s*(\d{2,5})\b/i);
+  if (cliCodM) out.codigoCliente = cliCodM[1];
+
+  // ---- IMPORTE TOTAL ----
+  // CLAVE: usar \b para que NO matchee SUBTOTAL
+  // Primero intenta "Importe Total" (factura tipo C/B), después "TOTAL" solo (factura A)
+  let totM = text.match(/Importe\s+Total\s*[:\s]*\$?\s*([\d.,]+)/i);
+  if (!totM) {
+    // \bTOTAL\b evita matchear "SUBTOTAL"
+    totM = text.match(/\bTOTAL\b\s*\$?\s*([\d.,]+)/i);
+  }
   if (totM) out.importe = parseArMoney(totM[1]);
+
+  // ---- FORMA DE PAGO ----
+  // Si dice "contado", marcamos override 0 días
+  const formaPagoM = text.match(/Forma\s+de\s+Pago\s*:?\s*([A-Za-zÁÉÍÓÚáéíóú\s]+?)(?:\s|$|\n|Precio)/i);
+  if (formaPagoM) {
+    const fp = formaPagoM[1].trim();
+    out.formaPago = fp;
+    if (/contado/i.test(fp)) {
+      out.condicionOverride = 0;
+    }
+  }
+
+  // ---- REMITO ASOCIADO ----
+  // "Remito Numero 0000015215" — útil cuando es FC a remito
+  const remM = text.match(/Remito\s+N(?:[uú]mero|[°º])\s+(\d{6,12})/i);
+  if (remM) out.remitoNumero = remM[1];
+
   return out;
 }
 function toIsoDate(s) {
@@ -753,24 +824,66 @@ function toIsoDate(s) {
   let [_, d, mo, y] = m; if (y.length === 2) y = '20' + y;
   return `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;
 }
-function parseArMoney(s) { if (!s) return 0; return parseFloat(String(s).replace(/\./g, '').replace(',', '.')) || 0; }
+function parseArMoney(s) {
+  if (!s) return 0;
+  const str = String(s).trim();
+  if (!str) return 0;
+  const lastComma = str.lastIndexOf(',');
+  const lastDot = str.lastIndexOf('.');
+  let normalized = str;
+  if (lastComma > lastDot) {
+    // El último separador es coma:
+    // Si tiene 3 dígitos después es separador de miles ("962,555")
+    // Si tiene 2 dígitos es decimal argentino ("962,55" o "1.234,56")
+    const tail = str.substring(lastComma + 1);
+    if (tail.length === 3 && /^\d+$/.test(tail)) {
+      normalized = str.replace(/,/g, '');
+    } else {
+      normalized = str.replace(/\./g, '').replace(',', '.');
+    }
+  } else if (lastDot > lastComma) {
+    // El último separador es punto:
+    // Si tiene 3 dígitos después es separador de miles ("962.555")
+    // Si tiene 1-2 dígitos es decimal americano ("962.55" o "1,234.56")
+    const tail = str.substring(lastDot + 1);
+    if (tail.length === 3 && /^\d+$/.test(tail) && lastComma === -1) {
+      normalized = str.replace(/\./g, '');
+    } else {
+      normalized = str.replace(/,/g, '');
+    }
+  }
+  return parseFloat(normalized) || 0;
+}
 function renderPdfPreview() {
   const preview = document.getElementById('pdfPreview');
   if (pendingPdfImports.length === 0) { preview.innerHTML = ''; return; }
-  const cliOpts = '<option value="">-- Cliente --</option>' + state.clientes.sort((a,b) => a.razonSocial.localeCompare(b.razonSocial)).map(c => `<option value="${c.id}">${c.razonSocial}</option>`).join('');
+  const cliOpts = '<option value="">-- Cliente --</option>' + state.clientes.sort((a,b) => a.razonSocial.localeCompare(b.razonSocial)).map(c => `<option value="${c.id}">${c.razonSocial}${c.codigo ? ' ('+c.codigo+')' : ''}</option>`).join('');
   preview.innerHTML = `<h3 style="margin:16px 0 8px">Revisá antes de importar</h3><div class="preview-table"><table>
-    <thead><tr><th>Archivo</th><th>Tipo</th><th>Nº</th><th>Fecha</th><th>CUIT</th><th>Importe</th><th>Cliente</th><th></th></tr></thead>
-    <tbody>${pendingPdfImports.map((p,i) => p.error
-      ? `<tr><td>${p.filename}</td><td colspan="6" style="color:var(--bad)">${p.error}</td><td><button class="btn btn-sm btn-danger" onclick="removePdfImport(${i})">×</button></td></tr>`
-      : `<tr><td><span class="small-label">${p.filename}</span></td>
+    <thead><tr><th>Archivo</th><th>Tipo</th><th>Nº</th><th>Fecha</th><th>CUIT</th><th>Importe</th><th>Cliente</th><th>Extra</th><th></th></tr></thead>
+    <tbody>${pendingPdfImports.map((p,i) => {
+      if (p.error) {
+        return `<tr><td>${p.filename}</td><td colspan="7" style="color:var(--bad)">${p.error}</td><td><button class="btn btn-sm btn-danger" onclick="removePdfImport(${i})">×</button></td></tr>`;
+      }
+      // Auto-detectar cliente si no está seteado
+      if (!p.clienteId) p.clienteId = guessCliente(p);
+      const extras = [];
+      if (p.formaPago) extras.push(`<span class="small-label">FP: ${p.formaPago}</span>`);
+      if (p.condicionOverride === 0) extras.push(`<span class="override-badge">CONTADO</span>`);
+      if (p.remitoNumero) extras.push(`<span class="small-label">Rto ${p.remitoNumero}</span>`);
+      return `<tr><td><span class="small-label">${p.filename}</span></td>
           <td><select onchange="pendingPdfImports[${i}].tipo=this.value">${['FC_A','FC_B','FC_C','FC_X'].map(t => `<option value="${t}" ${t===p.tipo?'selected':''}>${t.replace('FC_','')}</option>`).join('')}</select></td>
           <td><input value="${(p.ptoVenta||'')+'-'+(p.numero||'')}" onchange="pendingPdfImports[${i}]._nrocombo=this.value"></td>
           <td><input type="date" value="${p.fecha||''}" onchange="pendingPdfImports[${i}].fecha=this.value"></td>
           <td><input value="${p.cuit||''}" onchange="pendingPdfImports[${i}].cuit=this.value"></td>
           <td><input type="number" step="0.01" value="${p.importe||0}" onchange="pendingPdfImports[${i}].importe=parseFloat(this.value)"></td>
-          <td><select onchange="pendingPdfImports[${i}].clienteId=this.value">${cliOpts.replace(`value="${guessClienteByCuit(p.cuit)}"`, `value="${guessClienteByCuit(p.cuit)}" selected`)}</select></td>
+          <td><select onchange="pendingPdfImports[${i}].clienteId=this.value">${cliOpts.split('</option>').map(opt => {
+            if (opt.includes(`value="${p.clienteId}"`)) return opt.replace(`value="${p.clienteId}"`, `value="${p.clienteId}" selected`);
+            return opt;
+          }).join('</option>')}</select></td>
+          <td>${extras.join(' ')}</td>
           <td><button class="btn btn-sm btn-danger" onclick="removePdfImport(${i})">×</button></td>
-        </tr>`).join('')}</tbody></table></div>
+        </tr>`;
+    }).join('')}</tbody></table></div>
     <div style="margin-top:12px"><button class="btn btn-success" onclick="confirmPdfImport()">Importar ${pendingPdfImports.filter(p=>!p.error).length}</button>
     <button class="btn btn-secondary" onclick="pendingPdfImports=[];renderPdfPreview()">Cancelar</button></div>`;
 }
@@ -779,6 +892,19 @@ function guessClienteByCuit(cuit) {
   const clean = cuit.replace(/-/g, '');
   const c = state.clientes.find(x => (x.cuit || '').replace(/-/g, '') === clean);
   return c ? c.id : '';
+}
+function guessCliente(p) {
+  // 1) Por CUIT (más confiable)
+  if (p.cuit) {
+    const byId = guessClienteByCuit(p.cuit);
+    if (byId) return byId;
+  }
+  // 2) Por código interno (Tango)
+  if (p.codigoCliente) {
+    const c = state.clientes.find(x => x.codigo === p.codigoCliente);
+    if (c) return c.id;
+  }
+  return '';
 }
 function removePdfImport(idx) { pendingPdfImports.splice(idx, 1); renderPdfPreview(); }
 function confirmPdfImport() {
@@ -790,10 +916,13 @@ function confirmPdfImport() {
     state.comprobantes.push({
       id: uid(), tipo: p.tipo || 'FC_A', clienteId: p.clienteId,
       ptoVenta: (pv || '').trim(), numero: (nro || '').trim(),
-      fecha: p.fecha || new Date().toISOString().slice(0,10), fechaRemito: null,
+      fecha: p.fecha || new Date().toISOString().slice(0,10),
+      fechaRemito: p.fechaRemito || null,
       importe: p.importe || 0, saldo: p.importe || 0,
-      condicionOverride: null, modoOverride: null,
+      condicionOverride: p.condicionOverride != null ? p.condicionOverride : null,
+      modoOverride: null,
       pagos: [], chequeIds: [], cobranzaIds: [],
+      obs: p.remitoNumero ? `Remito asociado: ${p.remitoNumero}` + (p.formaPago ? `. Forma de pago: ${p.formaPago}` : '') : (p.formaPago ? `Forma de pago: ${p.formaPago}` : ''),
       origenImport: { tipo: 'pdf', archivoNombre: p.filename, importedAt: new Date().toISOString() },
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
     });
