@@ -119,6 +119,9 @@
   .alert-row.warn { background: #fef3c7; color: #92400e; border-left: 4px solid var(--warn); }
   .alert-row .alert-action { margin-left: auto; }
   .nav-badge { display: inline-block; min-width: 18px; padding: 1px 5px; margin-left: 4px; background: var(--bad); color: #fff; border-radius: 9px; font-size: 10px; font-weight: 700; }
+  .dup-warning { background: #fef3c7 !important; }
+  .dup-warning td { border-bottom-color: #fcd34d !important; }
+  .dup-badge { display: inline-block; padding: 1px 6px; background: var(--warn); color: #fff; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 4px; }
   @media (max-width: 700px) { .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; } main { padding: 12px; } }
 </style>
 </head>
@@ -235,7 +238,13 @@
           <input type="file" id="restoreInput" accept=".json" hidden onchange="restoreBackup(this.files[0])">
         </div>
         <hr>
-        <div class="small-label">v1.2 — Alertas in-app + resumen por email. Modal de pago con instrumentos múltiples.</div>
+        <h3 style="font-size:14px;margin:0 0 8px">Auditoría de duplicados</h3>
+        <div class="form-row">
+          <button class="btn btn-secondary" onclick="revisarDuplicados()">🔍 Buscar comprobantes duplicados ya cargados</button>
+        </div>
+        <div id="dupReport"></div>
+        <hr>
+        <div class="small-label">v1.3 — Detección automática de duplicados al cargar/importar comprobantes.</div>
       </div>
     </section>
   </main>
@@ -375,6 +384,42 @@ let state = { clientes: [], comprobantes: [], meta: { version: 1 } };
 let config = { binId: '', apiKey: '', mapeoExcel: null, emails: '' };
 let _saving = false;
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+// ============================================================
+// DETECCIÓN DE DUPLICADOS
+// ============================================================
+/**
+ * Busca un comprobante existente que coincida con los datos provistos.
+ * Match: mismo cliente + tipo + número (con o sin ptoVenta).
+ * excludeId: para no machear contra sí mismo al editar.
+ */
+function findDuplicate({ clienteId, tipo, ptoVenta, numero, importe, fecha }, excludeId = null) {
+  if (!clienteId || !numero) return null;
+  const numNorm = String(numero).replace(/^0+/, ''); // ignora ceros a la izquierda
+  const pvNorm = String(ptoVenta || '').replace(/^0+/, '');
+  return state.comprobantes.find(c => {
+    if (c.id === excludeId) return false;
+    if (c.clienteId !== clienteId) return false;
+    if (c.tipo !== tipo) return false;
+    const cNum = String(c.numero || '').replace(/^0+/, '');
+    if (cNum !== numNorm) return false;
+    // Si ambos tienen ptoVenta, deben coincidir; si uno no lo tiene, ignoramos
+    const cPv = String(c.ptoVenta || '').replace(/^0+/, '');
+    if (pvNorm && cPv && pvNorm !== cPv) return false;
+    return true;
+  });
+}
+
+/** Encuentra duplicados internos en el state (todos los pares con misma clave) */
+function findAllDuplicates() {
+  const groups = {};
+  state.comprobantes.forEach(c => {
+    const key = `${c.clienteId}|${c.tipo}|${String(c.numero||'').replace(/^0+/, '')}`;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(c);
+  });
+  return Object.values(groups).filter(g => g.length > 1);
+}
 
 function loadLocal() {
   try { const s = localStorage.getItem(LS_KEY); if (s) state = JSON.parse(s); } catch(e) {}
@@ -663,6 +708,18 @@ function saveComp() {
   };
   if (!data.clienteId) { alert('Falta cliente'); return; }
   if (!data.fecha) { alert('Falta fecha'); return; }
+  // Detección de duplicado
+  const dup = findDuplicate(data, editingCompId);
+  if (dup) {
+    const cli = state.clientes.find(c => c.id === dup.clienteId);
+    const msg = `⚠ Ya existe un comprobante con esos datos:\n\n` +
+                `${dup.tipo.replace('FC_','')} ${dup.ptoVenta || ''}-${dup.numero}\n` +
+                `Cliente: ${cli?.razonSocial || '?'}\n` +
+                `Fecha: ${fmtDate(dup.fecha)}\n` +
+                `Importe: ${fmtMoney(dup.importe)}\n\n` +
+                `¿Cargarlo igual? (OK solo si estás seguro que NO es duplicado)`;
+    if (!confirm(msg)) return;
+  }
   if (editingCompId) Object.assign(state.comprobantes.find(x => x.id === editingCompId), data, { updatedAt: new Date().toISOString() });
   else state.comprobantes.push({ id: uid(), ...data, pagos: [], chequeIds: [], cobranzaIds: [], origenImport: { tipo: 'manual', importedAt: new Date().toISOString() }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
   closeCompModal(); saveToBin(); renderAll();
@@ -1095,34 +1152,49 @@ function renderPdfPreview() {
   const preview = document.getElementById('pdfPreview');
   if (pendingPdfImports.length === 0) { preview.innerHTML = ''; return; }
   const cliOpts = '<option value="">-- Cliente --</option>' + state.clientes.sort((a,b) => a.razonSocial.localeCompare(b.razonSocial)).map(c => `<option value="${c.id}">${c.razonSocial}${c.codigo ? ' ('+c.codigo+')' : ''}</option>`).join('');
-  preview.innerHTML = `<h3 style="margin:16px 0 8px">Revisá antes de importar</h3><div class="preview-table"><table>
-    <thead><tr><th>Archivo</th><th>Tipo</th><th>Nº</th><th>Fecha</th><th>CUIT</th><th>Importe</th><th>Cliente</th><th>Extra</th><th></th></tr></thead>
+  // Pre-procesar para detectar duplicados
+  pendingPdfImports.forEach(p => {
+    if (p.error) return;
+    if (!p.clienteId) p.clienteId = guessCliente(p);
+    p._dup = findDuplicate({
+      clienteId: p.clienteId, tipo: p.tipo,
+      ptoVenta: p.ptoVenta, numero: p.numero
+    });
+    if (p._omit == null) p._omit = !!p._dup; // por defecto omite si es duplicado
+  });
+  const dupCount = pendingPdfImports.filter(p => p._dup).length;
+  const toImport = pendingPdfImports.filter(p => !p.error && !p._omit).length;
+  preview.innerHTML = `<h3 style="margin:16px 0 8px">Revisá antes de importar${dupCount > 0 ? ` · <span style="color:var(--warn)">⚠ ${dupCount} duplicado${dupCount>1?'s':''} detectado${dupCount>1?'s':''}</span>` : ''}</h3>
+    <div class="preview-table"><table>
+    <thead><tr><th>Archivo</th><th>Tipo</th><th>Nº</th><th>Fecha</th><th>CUIT</th><th>Importe</th><th>Cliente</th><th>Extra</th><th>Importar</th></tr></thead>
     <tbody>${pendingPdfImports.map((p,i) => {
       if (p.error) {
         return `<tr><td>${p.filename}</td><td colspan="7" style="color:var(--bad)">${p.error}</td><td><button class="btn btn-sm btn-danger" onclick="removePdfImport(${i})">×</button></td></tr>`;
       }
-      // Auto-detectar cliente si no está seteado
-      if (!p.clienteId) p.clienteId = guessCliente(p);
       const extras = [];
       if (p.formaPago) extras.push(`<span class="small-label">FP: ${p.formaPago}</span>`);
       if (p.condicionOverride === 0) extras.push(`<span class="override-badge">CONTADO</span>`);
       if (p.remitoNumero) extras.push(`<span class="small-label">Rto ${p.remitoNumero}</span>`);
-      return `<tr><td><span class="small-label">${p.filename}</span></td>
-          <td><select onchange="pendingPdfImports[${i}].tipo=this.value">${['FC_A','FC_B','FC_C','FC_X'].map(t => `<option value="${t}" ${t===p.tipo?'selected':''}>${t.replace('FC_','')}</option>`).join('')}</select></td>
-          <td><input value="${(p.ptoVenta||'')+'-'+(p.numero||'')}" onchange="pendingPdfImports[${i}]._nrocombo=this.value"></td>
+      if (p._dup) extras.push(`<span class="dup-badge" title="Ya cargado el ${fmtDate(p._dup.fecha)}: ${fmtMoney(p._dup.importe)}">⚠ DUP</span>`);
+      const rowCls = p._dup ? 'dup-warning' : '';
+      return `<tr class="${rowCls}"><td><span class="small-label">${p.filename}</span></td>
+          <td><select onchange="pendingPdfImports[${i}].tipo=this.value;renderPdfPreview()">${['FC_A','FC_B','FC_C','FC_X'].map(t => `<option value="${t}" ${t===p.tipo?'selected':''}>${t.replace('FC_','')}</option>`).join('')}</select></td>
+          <td><input value="${(p.ptoVenta||'')+'-'+(p.numero||'')}" onchange="pendingPdfImports[${i}]._nrocombo=this.value;const parts=this.value.split('-');pendingPdfImports[${i}].ptoVenta=parts[0];pendingPdfImports[${i}].numero=parts[1]||'';renderPdfPreview()"></td>
           <td><input type="date" value="${p.fecha||''}" onchange="pendingPdfImports[${i}].fecha=this.value"></td>
           <td><input value="${p.cuit||''}" onchange="pendingPdfImports[${i}].cuit=this.value"></td>
           <td><input type="number" step="0.01" value="${p.importe||0}" onchange="pendingPdfImports[${i}].importe=parseFloat(this.value)"></td>
-          <td><select onchange="pendingPdfImports[${i}].clienteId=this.value">${cliOpts.split('</option>').map(opt => {
+          <td><select onchange="pendingPdfImports[${i}].clienteId=this.value;renderPdfPreview()">${cliOpts.split('</option>').map(opt => {
             if (opt.includes(`value="${p.clienteId}"`)) return opt.replace(`value="${p.clienteId}"`, `value="${p.clienteId}" selected`);
             return opt;
           }).join('</option>')}</select></td>
           <td>${extras.join(' ')}</td>
-          <td><button class="btn btn-sm btn-danger" onclick="removePdfImport(${i})">×</button></td>
+          <td><input type="checkbox" ${p._omit ? '' : 'checked'} onchange="pendingPdfImports[${i}]._omit=!this.checked"> <button class="btn btn-sm btn-danger" onclick="removePdfImport(${i})">×</button></td>
         </tr>`;
     }).join('')}</tbody></table></div>
-    <div style="margin-top:12px"><button class="btn btn-success" onclick="confirmPdfImport()">Importar ${pendingPdfImports.filter(p=>!p.error).length}</button>
-    <button class="btn btn-secondary" onclick="pendingPdfImports=[];renderPdfPreview()">Cancelar</button></div>`;
+    <div style="margin-top:12px"><button class="btn btn-success" onclick="confirmPdfImport()">Importar ${toImport}</button>
+    <button class="btn btn-secondary" onclick="pendingPdfImports=[];renderPdfPreview()">Cancelar</button>
+    ${dupCount > 0 ? `<span class="small-label" style="margin-left:12px">Los duplicados se omiten por defecto. Tildá la casilla si querés forzar la importación.</span>` : ''}
+    </div>`;
 }
 function guessClienteByCuit(cuit) {
   if (!cuit) return '';
@@ -1145,9 +1217,10 @@ function guessCliente(p) {
 }
 function removePdfImport(idx) { pendingPdfImports.splice(idx, 1); renderPdfPreview(); }
 function confirmPdfImport() {
-  let n = 0;
+  let n = 0, omitidos = 0;
   pendingPdfImports.forEach(p => {
     if (p.error || !p.clienteId) return;
+    if (p._omit) { omitidos++; return; }
     const combo = p._nrocombo || ((p.ptoVenta||'') + '-' + (p.numero||''));
     const [pv, nro] = combo.split('-');
     state.comprobantes.push({
@@ -1166,7 +1239,8 @@ function confirmPdfImport() {
     n++;
   });
   pendingPdfImports = []; renderPdfPreview();
-  alert(`Importadas ${n} facturas`); saveToBin(); renderAll();
+  alert(`Importadas: ${n}` + (omitidos > 0 ? `\nOmitidas (duplicadas): ${omitidos}` : ''));
+  saveToBin(); renderAll();
 }
 
 let pendingXlsImports = null;
@@ -1219,7 +1293,7 @@ function confirmXlsImport() {
   config.mapeoExcel = mapping;
   localStorage.setItem(CFG_KEY, JSON.stringify(config));
   document.getElementById('cfgMapeo').value = JSON.stringify(mapping, null, 2);
-  let importados = 0, nuevosClientes = 0, omitidos = 0;
+  let importados = 0, nuevosClientes = 0, omitidos = 0, duplicados = 0;
   const colIdx = {};
   Object.keys(mapping).forEach(k => { if (mapping[k]) colIdx[k] = headers.indexOf(mapping[k]); });
   rows.forEach(row => {
@@ -1236,10 +1310,16 @@ function confirmXlsImport() {
       cli = { id: uid(), codigo, cuit, razonSocial: razon || codigo || 'Sin nombre', vendedor: 'Winflex', condicionDias: 30, modoVencimiento: 'factura', condicionDiasFcX: null, modoVencimientoFcX: null, contacto: '', obs: 'Auto-creado por import Excel', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       state.clientes.push(cli); nuevosClientes++;
     }
+    const numero = String(get('numero') || '').trim();
+    // Check duplicado
+    if (numero) {
+      const dup = findDuplicate({ clienteId: cli.id, tipo: 'FC_X', ptoVenta: '', numero });
+      if (dup) { duplicados++; return; }
+    }
     const importe = parseArMoney(String(get('importe') || '0'));
     state.comprobantes.push({
       id: uid(), tipo: 'FC_X', clienteId: cli.id, ptoVenta: '',
-      numero: String(get('numero') || '').trim(),
+      numero,
       fecha: parseFechaCell(get('fecha')) || new Date().toISOString().slice(0,10),
       fechaRemito: parseFechaCell(get('fechaRemito')) || null,
       importe, saldo: importe, condicionOverride: null, modoOverride: null,
@@ -1250,7 +1330,7 @@ function confirmXlsImport() {
     importados++;
   });
   pendingXlsImports = null; renderXlsPreview();
-  alert(`Importados: ${importados}\nClientes nuevos: ${nuevosClientes}\nOmitidos: ${omitidos}`);
+  alert(`Importados: ${importados}\nClientes nuevos: ${nuevosClientes}\nDuplicados omitidos: ${duplicados}\nFilas vacías omitidas: ${omitidos}`);
   saveToBin(); renderAll();
 }
 function parseFechaCell(v) {
@@ -1472,6 +1552,42 @@ function copiarResumen() {
     ta.select(); document.execCommand('copy');
     alert('Resumen copiado.');
   });
+}
+
+// ============================================================
+// AUDITORÍA DE DUPLICADOS EXISTENTES
+// ============================================================
+function revisarDuplicados() {
+  const grupos = findAllDuplicates();
+  const div = document.getElementById('dupReport');
+  if (grupos.length === 0) {
+    div.innerHTML = '<div style="padding:12px;background:#dcfce7;border-radius:6px;color:var(--ok);margin-top:10px">✓ No se encontraron duplicados</div>';
+    return;
+  }
+  const cliMap = Object.fromEntries(state.clientes.map(c => [c.id, c]));
+  let html = `<div style="padding:12px;background:#fef3c7;border-radius:6px;margin:10px 0">
+    ⚠ Se encontraron <b>${grupos.length}</b> grupo${grupos.length>1?'s':''} de comprobantes duplicados:
+  </div>`;
+  grupos.forEach((grupo, i) => {
+    const cli = cliMap[grupo[0].clienteId];
+    html += `<div class="card" style="padding:12px;margin-bottom:8px">
+      <div style="font-weight:600;margin-bottom:6px">${cli?.razonSocial || '?'} — ${grupo[0].tipo.replace('FC_','')} ${grupo[0].numero}</div>
+      <table><thead><tr><th>Fecha</th><th>Pto-Nº</th><th class="num">Importe</th><th class="num">Saldo</th><th>Origen</th><th>Acción</th></tr></thead><tbody>
+      ${grupo.map(c => `<tr>
+        <td>${fmtDate(c.fecha)}</td>
+        <td>${c.ptoVenta || ''}-${c.numero || ''}</td>
+        <td class="num">${fmtMoney(c.importe)}</td>
+        <td class="num">${fmtMoney(c.saldo)}</td>
+        <td><span class="small-label">${c.origenImport?.tipo || 'manual'}${c.origenImport?.archivoNombre ? ' — ' + c.origenImport.archivoNombre : ''}</span></td>
+        <td>
+          <button class="btn btn-sm btn-secondary" onclick="openCompModal('${c.id}')">Ver</button>
+          <button class="btn btn-sm btn-danger" onclick="if(confirm('¿Eliminar este comprobante?')){state.comprobantes=state.comprobantes.filter(x=>x.id!=='${c.id}');saveToBin();renderAll();revisarDuplicados();}">Borrar</button>
+        </td>
+      </tr>`).join('')}
+      </tbody></table>
+    </div>`;
+  });
+  div.innerHTML = html;
 }
 function init() {
   loadLocal();
