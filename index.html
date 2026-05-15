@@ -86,6 +86,7 @@
   .form-row label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
   .form-row input, .form-row select, .form-row textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; }
   .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
   .preview-table { max-height: 400px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
   .preview-table table { font-size: 12px; }
@@ -95,7 +96,9 @@
   .upload-area.dragover { border-color: var(--accent); background: #e0efff; }
   .small-label { font-size: 11px; color: var(--muted); }
   hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
-  @media (max-width: 700px) { .form-grid-2 { grid-template-columns: 1fr; } main { padding: 12px; } }
+  .section-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin: 16px 0 8px; font-weight: 600; }
+  .override-badge { display: inline-block; margin-left: 4px; padding: 1px 6px; background: #fef3c7; color: #92400e; border-radius: 4px; font-size: 10px; font-weight: 600; }
+  @media (max-width: 700px) { .form-grid-2, .form-grid-3 { grid-template-columns: 1fr; } main { padding: 12px; } }
 </style>
 </head>
 <body>
@@ -165,7 +168,7 @@
         </div>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr><th>Código</th><th>Razón Social</th><th>CUIT</th><th>Vendedor</th><th>Cond.</th><th>Modo Vto.</th><th class="num">Saldo</th><th></th></tr></thead>
+            <thead><tr><th>Código</th><th>Razón Social</th><th>CUIT</th><th>Vendedor</th><th>Cond. FC A/B/C</th><th>Cond. FC X</th><th class="num">Saldo</th><th></th></tr></thead>
             <tbody id="cliBody"></tbody>
           </table>
         </div>
@@ -205,7 +208,7 @@
           <input type="file" id="restoreInput" accept=".json" hidden onchange="restoreBackup(this.files[0])">
         </div>
         <hr>
-        <div class="small-label">v1.0 — Esquema preparado para integración futura con app de Cheques (campos chequeIds[] reservados).</div>
+        <div class="small-label">v1.1 — Soporte de condiciones duales por cliente (FC A/B/C vs FC X) con override por comprobante.</div>
       </div>
     </section>
   </main>
@@ -221,13 +224,23 @@
     <div class="form-row"><label>Razón Social</label><input id="cliRazon"></div>
     <div class="form-grid-2">
       <div class="form-row"><label>Vendedor</label><select id="cliVendedor"><option>Enrique</option><option>Matías</option><option>Winflex</option><option>Vicente</option></select></div>
-      <div class="form-row"><label>Condición (días)</label><select id="cliCondicion"><option value="0">Contado</option><option value="15">15</option><option value="30">30</option><option value="45">45</option><option value="60">60</option><option value="90">90</option></select></div>
-    </div>
-    <div class="form-grid-2">
-      <div class="form-row"><label>Vencimiento se cuenta desde</label><select id="cliModo"><option value="factura">Fecha factura</option><option value="remito">Fecha remito (FC a remito)</option></select></div>
       <div class="form-row"><label>Contacto / Email</label><input id="cliContacto"></div>
     </div>
-    <div class="form-row"><label>Observaciones</label><textarea id="cliObs" rows="2"></textarea></div>
+
+    <div class="section-title">Condición para Factura A / B / C</div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Días</label><select id="cliCondicion"><option value="0">Contado</option><option value="15">15</option><option value="30">30</option><option value="45">45</option><option value="60">60</option><option value="90">90</option></select></div>
+      <div class="form-row"><label>Vto. cuenta desde</label><select id="cliModo"><option value="factura">Fecha factura</option><option value="remito">Fecha remito</option></select></div>
+    </div>
+
+    <div class="section-title">Condición para FC X (remito s/factura)</div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Días</label><select id="cliCondicionFcX"><option value="">— Igual que FC A —</option><option value="0">Contado</option><option value="15">15</option><option value="30">30</option><option value="45">45</option><option value="60">60</option><option value="90">90</option></select></div>
+      <div class="form-row"><label>Vto. cuenta desde</label><select id="cliModoFcX"><option value="">— Igual que FC A —</option><option value="factura">Fecha factura</option><option value="remito">Fecha remito</option></select></div>
+    </div>
+    <p class="small-label" style="margin-top:-8px">Dejá vacío si FC X usa la misma condición que FC A/B/C. Configurá si difieren (ej: FC A 30d / FC X 60d).</p>
+
+    <div class="form-row" style="margin-top:12px"><label>Observaciones</label><textarea id="cliObs" rows="2"></textarea></div>
     <div class="modal-actions">
       <button class="btn btn-danger" id="cliDelBtn" onclick="deleteCliente()" style="margin-right:auto;display:none">Eliminar</button>
       <button class="btn btn-secondary" onclick="closeCliModal()">Cancelar</button>
@@ -240,23 +253,30 @@
   <div class="modal">
     <h3 id="compModalTitle">Nuevo Comprobante</h3>
     <div class="form-grid-2">
-      <div class="form-row"><label>Tipo</label><select id="compTipo"><option value="FC_A">Factura A</option><option value="FC_B">Factura B</option><option value="FC_C">Factura C</option><option value="FC_X">FC X</option></select></div>
-      <div class="form-row"><label>Cliente</label><select id="compCliente"></select></div>
+      <div class="form-row"><label>Tipo</label><select id="compTipo" onchange="onCompTipoChange()"><option value="FC_A">Factura A</option><option value="FC_B">Factura B</option><option value="FC_C">Factura C</option><option value="FC_X">FC X</option></select></div>
+      <div class="form-row"><label>Cliente</label><select id="compCliente" onchange="onCompClienteChange()"></select></div>
     </div>
     <div class="form-grid-2">
       <div class="form-row"><label>Pto. Venta</label><input id="compPtoVenta" placeholder="0001"></div>
       <div class="form-row"><label>Número</label><input id="compNumero" placeholder="00012345"></div>
     </div>
     <div class="form-grid-2">
-      <div class="form-row"><label>Fecha Factura</label><input id="compFecha" type="date"></div>
-      <div class="form-row"><label>Fecha Remito (si FC a remito)</label><input id="compFechaRemito" type="date"></div>
+      <div class="form-row"><label>Fecha Factura</label><input id="compFecha" type="date" onchange="updateCompVtoCalc()"></div>
+      <div class="form-row"><label>Fecha Remito</label><input id="compFechaRemito" type="date" onchange="updateCompVtoCalc()"></div>
     </div>
     <div class="form-grid-2">
       <div class="form-row"><label>Importe</label><input id="compImporte" type="number" step="0.01" oninput="onImporteChange()"></div>
       <div class="form-row"><label>Saldo pendiente</label><input id="compSaldo" type="number" step="0.01"></div>
     </div>
+
+    <div class="section-title">Condición del comprobante (override) <span class="small-label" style="text-transform:none">— por defecto trae la del cliente según tipo</span></div>
+    <div class="form-grid-2">
+      <div class="form-row"><label>Días override</label><input id="compCondOverride" type="number" placeholder="(usa default)" onchange="updateCompVtoCalc()"></div>
+      <div class="form-row"><label>Vto. cuenta desde (override)</label><select id="compModoOverride" onchange="updateCompVtoCalc()"><option value="">(usa default)</option><option value="factura">Fecha factura</option><option value="remito">Fecha remito</option></select></div>
+    </div>
+
     <div class="form-row"><label>Observaciones</label><textarea id="compObs" rows="2"></textarea></div>
-    <div class="form-row" id="compVtoCalc" style="font-size:12px;color:var(--muted)"></div>
+    <div class="form-row" id="compVtoCalc" style="font-size:12px;color:var(--muted);padding:8px;background:#f9fafb;border-radius:6px"></div>
     <div class="modal-actions">
       <button class="btn btn-danger" id="compDelBtn" onclick="deleteComp()" style="margin-right:auto;display:none">Eliminar</button>
       <button class="btn btn-success" id="compPagoBtn" onclick="openPagoModal()" style="display:none">Registrar pago</button>
@@ -360,12 +380,51 @@ function addDays(dateStr, days) {
   d.setDate(d.getDate() + Number(days || 0));
   return d.toISOString().slice(0, 10);
 }
-function calcVencimiento(comp) {
+
+/**
+ * Devuelve {dias, modo, origen} para un comprobante.
+ * Override del comprobante > Default FC X del cliente (si es FC X) > Default FC A del cliente
+ */
+function condicionEfectiva(comp) {
   const cli = state.clientes.find(c => c.id === comp.clienteId);
-  if (!cli) return comp.fecha;
-  const base = (cli.modoVencimiento === 'remito' && comp.fechaRemito) ? comp.fechaRemito : comp.fecha;
-  return addDays(base, cli.condicionDias);
+  if (!cli) return { dias: 0, modo: 'factura', origen: 'sin-cliente' };
+  // Override explícito
+  if (comp.condicionOverride != null && comp.condicionOverride !== '' && !isNaN(comp.condicionOverride)) {
+    return {
+      dias: Number(comp.condicionOverride),
+      modo: comp.modoOverride || (cli.modoVencimiento || 'factura'),
+      origen: 'override'
+    };
+  }
+  if (comp.modoOverride) {
+    return {
+      dias: cli.condicionDias || 30,
+      modo: comp.modoOverride,
+      origen: 'override-modo'
+    };
+  }
+  // FC X usa condición específica si está definida
+  if (comp.tipo === 'FC_X' && cli.condicionDiasFcX != null && cli.condicionDiasFcX !== '' && !isNaN(cli.condicionDiasFcX)) {
+    return {
+      dias: Number(cli.condicionDiasFcX),
+      modo: cli.modoVencimientoFcX || cli.modoVencimiento || 'factura',
+      origen: 'fcx'
+    };
+  }
+  // Default del cliente (FC A/B/C)
+  return {
+    dias: cli.condicionDias || 30,
+    modo: cli.modoVencimiento || 'factura',
+    origen: 'default'
+  };
 }
+
+function calcVencimiento(comp) {
+  const { dias, modo } = condicionEfectiva(comp);
+  const base = (modo === 'remito' && comp.fechaRemito) ? comp.fechaRemito : comp.fecha;
+  return addDays(base, dias);
+}
+
 function diasParaVencer(comp) {
   const vto = calcVencimiento(comp); if (!vto) return null;
   const hoy = new Date(); hoy.setHours(0,0,0,0);
@@ -403,6 +462,8 @@ function openClienteModal(id) {
   document.getElementById('cliVendedor').value = c?.vendedor || 'Matías';
   document.getElementById('cliCondicion').value = c?.condicionDias ?? 30;
   document.getElementById('cliModo').value = c?.modoVencimiento || 'factura';
+  document.getElementById('cliCondicionFcX').value = c?.condicionDiasFcX ?? '';
+  document.getElementById('cliModoFcX').value = c?.modoVencimientoFcX || '';
   document.getElementById('cliContacto').value = c?.contacto || '';
   document.getElementById('cliObs').value = c?.obs || '';
   document.getElementById('cliDelBtn').style.display = id ? '' : 'none';
@@ -410,6 +471,8 @@ function openClienteModal(id) {
 }
 function closeCliModal() { document.getElementById('cliModalBg').classList.remove('show'); }
 function saveCliente() {
+  const fcXDias = document.getElementById('cliCondicionFcX').value;
+  const fcXModo = document.getElementById('cliModoFcX').value;
   const data = {
     codigo: document.getElementById('cliCodigo').value.trim(),
     cuit: document.getElementById('cliCuit').value.trim(),
@@ -417,6 +480,8 @@ function saveCliente() {
     vendedor: document.getElementById('cliVendedor').value,
     condicionDias: Number(document.getElementById('cliCondicion').value),
     modoVencimiento: document.getElementById('cliModo').value,
+    condicionDiasFcX: fcXDias === '' ? null : Number(fcXDias),
+    modoVencimientoFcX: fcXModo || null,
     contacto: document.getElementById('cliContacto').value.trim(),
     obs: document.getElementById('cliObs').value.trim()
   };
@@ -442,10 +507,16 @@ function renderClientes() {
   }).sort((a,b) => a.razonSocial.localeCompare(b.razonSocial));
   document.getElementById('cliBody').innerHTML = filtered.map(c => {
     const saldo = state.comprobantes.filter(x => x.clienteId === c.id).reduce((s,x) => s + (x.saldo || 0), 0);
+    const condA = (c.condicionDias === 0 ? 'Contado' : (c.condicionDias || 30) + 'd') + ' / ' + (c.modoVencimiento === 'remito' ? 'rem' : 'fc');
+    const condX = (c.condicionDiasFcX != null && c.condicionDiasFcX !== '')
+      ? ((c.condicionDiasFcX === 0 ? 'Contado' : c.condicionDiasFcX + 'd') + ' / ' + ((c.modoVencimientoFcX || c.modoVencimiento) === 'remito' ? 'rem' : 'fc'))
+      : '<span class="small-label">(=FC A)</span>';
     return `<tr onclick="openClienteModal('${c.id}')" style="cursor:pointer">
       <td>${c.codigo || '–'}</td><td>${c.razonSocial}</td><td>${c.cuit || '–'}</td>
-      <td>${c.vendedor}</td><td>${c.condicionDias === 0 ? 'Contado' : c.condicionDias + 'd'}</td>
-      <td>${c.modoVencimiento === 'remito' ? 'Remito' : 'Factura'}</td><td class="num">${fmtMoney(saldo)}</td>
+      <td>${c.vendedor}</td>
+      <td><span class="small-label">${condA}</span></td>
+      <td>${condX}</td>
+      <td class="num">${fmtMoney(saldo)}</td>
       <td><button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();openClienteModal('${c.id}')">Editar</button></td>
     </tr>`;
   }).join('');
@@ -468,27 +539,43 @@ function openCompModal(id) {
   document.getElementById('compFechaRemito').value = c?.fechaRemito || '';
   document.getElementById('compImporte').value = c?.importe ?? '';
   document.getElementById('compSaldo').value = c?.saldo ?? (c?.importe ?? '');
+  document.getElementById('compCondOverride').value = c?.condicionOverride ?? '';
+  document.getElementById('compModoOverride').value = c?.modoOverride || '';
   document.getElementById('compObs').value = c?.obs || '';
   document.getElementById('compDelBtn').style.display = id ? '' : 'none';
   document.getElementById('compPagoBtn').style.display = id ? '' : 'none';
   updateCompVtoCalc(); renderPagosInModal(c);
-  document.getElementById('compCliente').onchange = updateCompVtoCalc;
-  document.getElementById('compFecha').onchange = updateCompVtoCalc;
-  document.getElementById('compFechaRemito').onchange = updateCompVtoCalc;
   document.getElementById('compModalBg').classList.add('show');
 }
 function closeCompModal() { document.getElementById('compModalBg').classList.remove('show'); }
 function onImporteChange() { if (!editingCompId) document.getElementById('compSaldo').value = document.getElementById('compImporte').value; }
+
+function onCompTipoChange() { updateCompVtoCalc(); }
+function onCompClienteChange() { updateCompVtoCalc(); }
+
 function updateCompVtoCalc() {
-  const cli = state.clientes.find(c => c.id === document.getElementById('compCliente').value);
-  const fecha = document.getElementById('compFecha').value;
-  const fechaR = document.getElementById('compFechaRemito').value;
+  // Simular el cálculo con los datos del form
+  const cliId = document.getElementById('compCliente').value;
+  const cli = state.clientes.find(c => c.id === cliId);
   const div = document.getElementById('compVtoCalc');
-  if (!cli || !fecha) { div.textContent = ''; return; }
-  const base = (cli.modoVencimiento === 'remito' && fechaR) ? fechaR : fecha;
-  const vto = addDays(base, cli.condicionDias);
-  div.innerHTML = `Vencimiento calculado: <b>${fmtDate(vto)}</b> (${cli.condicionDias}d desde ${cli.modoVencimiento === 'remito' ? 'remito' : 'factura'})`;
+  if (!cli) { div.innerHTML = '<span class="small-label">Seleccioná cliente</span>'; return; }
+  const fakeComp = {
+    tipo: document.getElementById('compTipo').value,
+    clienteId: cliId,
+    fecha: document.getElementById('compFecha').value,
+    fechaRemito: document.getElementById('compFechaRemito').value || null,
+    condicionOverride: document.getElementById('compCondOverride').value !== '' ? Number(document.getElementById('compCondOverride').value) : null,
+    modoOverride: document.getElementById('compModoOverride').value || null
+  };
+  const cond = condicionEfectiva(fakeComp);
+  const vto = calcVencimiento(fakeComp);
+  let origenTxt = '';
+  if (cond.origen === 'override' || cond.origen === 'override-modo') origenTxt = ' <span class="override-badge">OVERRIDE</span>';
+  else if (cond.origen === 'fcx') origenTxt = ' <span class="small-label">(default FC X del cliente)</span>';
+  else origenTxt = ' <span class="small-label">(default cliente)</span>';
+  div.innerHTML = `Vencimiento calculado: <b>${fmtDate(vto)}</b> · ${cond.dias}d desde ${cond.modo === 'remito' ? 'remito' : 'factura'}${origenTxt}`;
 }
+
 function renderPagosInModal(comp) {
   const div = document.getElementById('compPagosList');
   if (!comp || !comp.pagos || comp.pagos.length === 0) { div.innerHTML = comp ? '<div class="small-label">Sin pagos registrados</div>' : ''; return; }
@@ -504,6 +591,8 @@ function removePago(idx) {
   renderPagosInModal(c); saveToBin();
 }
 function saveComp() {
+  const condOv = document.getElementById('compCondOverride').value;
+  const modoOv = document.getElementById('compModoOverride').value;
   const data = {
     tipo: document.getElementById('compTipo').value,
     clienteId: document.getElementById('compCliente').value,
@@ -513,6 +602,8 @@ function saveComp() {
     fechaRemito: document.getElementById('compFechaRemito').value || null,
     importe: parseFloat(document.getElementById('compImporte').value) || 0,
     saldo: parseFloat(document.getElementById('compSaldo').value) || 0,
+    condicionOverride: condOv === '' ? null : Number(condOv),
+    modoOverride: modoOv || null,
     obs: document.getElementById('compObs').value.trim()
   };
   if (!data.clienteId) { alert('Falta cliente'); return; }
@@ -532,7 +623,7 @@ function renderComprobantes() {
   const est = document.getElementById('filtroEstado').value;
   const tipo = document.getElementById('filtroTipo').value;
   const cliMap = Object.fromEntries(state.clientes.map(c => [c.id, c]));
-  const enriched = state.comprobantes.map(c => ({ ...c, _cliente: cliMap[c.clienteId], _vto: calcVencimiento(c), _estado: estadoComp(c) }));
+  const enriched = state.comprobantes.map(c => ({ ...c, _cliente: cliMap[c.clienteId], _vto: calcVencimiento(c), _estado: estadoComp(c), _cond: condicionEfectiva(c) }));
   const filtered = enriched.filter(c => {
     if (c._cliente && vend && c._cliente.vendedor !== vend) return false;
     if (est && c._estado !== est) return false;
@@ -544,7 +635,8 @@ function renderComprobantes() {
     <td>${dotEstado(c._estado)}</td><td><span class="badge badge-grey">${c.tipo.replace('FC_','')}</span></td>
     <td>${c.ptoVenta ? c.ptoVenta + '-' : ''}${c.numero || '–'}</td><td>${fmtDate(c.fecha)}</td>
     <td>${c._cliente?.razonSocial || '?'}</td><td>${c._cliente?.vendedor || '–'}</td>
-    <td>${fmtDate(c._vto)}</td><td class="num">${fmtMoney(c.importe)}</td>
+    <td>${fmtDate(c._vto)}${c._cond.origen === 'override' || c._cond.origen === 'override-modo' ? '<span class="override-badge">OV</span>' : ''}</td>
+    <td class="num">${fmtMoney(c.importe)}</td>
     <td class="num">${fmtMoney(c.saldo)}</td><td>${badgeEstado(c._estado)}</td>
     <td><button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();openCompModal('${c.id}')">Ver</button></td>
   </tr>`).join('');
@@ -700,6 +792,7 @@ function confirmPdfImport() {
       ptoVenta: (pv || '').trim(), numero: (nro || '').trim(),
       fecha: p.fecha || new Date().toISOString().slice(0,10), fechaRemito: null,
       importe: p.importe || 0, saldo: p.importe || 0,
+      condicionOverride: null, modoOverride: null,
       pagos: [], chequeIds: [], cobranzaIds: [],
       origenImport: { tipo: 'pdf', archivoNombre: p.filename, importedAt: new Date().toISOString() },
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
@@ -749,7 +842,7 @@ function renderXlsPreview() {
   const headerOpts = ['<option value="">--</option>'].concat(headers.map(h => `<option value="${h}">${h}</option>`)).join('');
   div.innerHTML = `<h3 style="margin:16px 0 8px">Mapear columnas</h3><div class="form-grid-2">
     ${fields.map(([k, label]) => `<div class="form-row"><label>${label}</label><select onchange="pendingXlsImports.mapping['${k}']=this.value">${headerOpts.replace(`value="${mapping[k]||''}"`, `value="${mapping[k]||''}" selected`)}</select></div>`).join('')}
-    </div><div class="small-label" style="margin-bottom:8px">Vista previa (5 filas). Clientes desconocidos se crean automáticamente.</div>
+    </div><div class="small-label" style="margin-bottom:8px">Los remitos del Excel se cargan como FC X. Vista previa (5 filas):</div>
     <div class="preview-table"><table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
     <tbody>${rows.slice(0,5).map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
     <div style="margin-top:12px"><button class="btn btn-success" onclick="confirmXlsImport()">Importar ${rows.length} filas</button>
@@ -774,7 +867,7 @@ function confirmXlsImport() {
       (codigo && c.codigo === codigo) ||
       (razon && c.razonSocial.toLowerCase() === razon.toLowerCase()));
     if (!cli) {
-      cli = { id: uid(), codigo, cuit, razonSocial: razon || codigo || 'Sin nombre', vendedor: 'Winflex', condicionDias: 30, modoVencimiento: 'factura', contacto: '', obs: 'Auto-creado por import Excel', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      cli = { id: uid(), codigo, cuit, razonSocial: razon || codigo || 'Sin nombre', vendedor: 'Winflex', condicionDias: 30, modoVencimiento: 'factura', condicionDiasFcX: null, modoVencimientoFcX: null, contacto: '', obs: 'Auto-creado por import Excel', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
       state.clientes.push(cli); nuevosClientes++;
     }
     const importe = parseArMoney(String(get('importe') || '0'));
@@ -783,7 +876,8 @@ function confirmXlsImport() {
       numero: String(get('numero') || '').trim(),
       fecha: parseFechaCell(get('fecha')) || new Date().toISOString().slice(0,10),
       fechaRemito: parseFechaCell(get('fechaRemito')) || null,
-      importe, saldo: importe, pagos: [], chequeIds: [], cobranzaIds: [],
+      importe, saldo: importe, condicionOverride: null, modoOverride: null,
+      pagos: [], chequeIds: [], cobranzaIds: [],
       origenImport: { tipo: 'excel', archivoNombre: filename, importedAt: new Date().toISOString() },
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
     });
@@ -807,10 +901,13 @@ function exportComprobantes() {
   const cliMap = Object.fromEntries(state.clientes.map(c => [c.id, c]));
   const data = state.comprobantes.map(c => {
     const cli = cliMap[c.clienteId];
+    const cond = condicionEfectiva(c);
     return { Tipo: c.tipo.replace('FC_',''), PtoVenta: c.ptoVenta, Numero: c.numero, Fecha: c.fecha,
       FechaRemito: c.fechaRemito || '', Cliente: cli?.razonSocial || '', CUIT: cli?.cuit || '',
-      Vendedor: cli?.vendedor || '', CondDias: cli?.condicionDias || '', Vencimiento: calcVencimiento(c),
-      Importe: c.importe, Saldo: c.saldo, Estado: estadoComp(c), Observaciones: c.obs || '' };
+      Vendedor: cli?.vendedor || '', CondDias: cond.dias, ModoVto: cond.modo,
+      Vencimiento: calcVencimiento(c), Importe: c.importe, Saldo: c.saldo,
+      Estado: estadoComp(c), Override: cond.origen.startsWith('override') ? 'SI' : '',
+      Observaciones: c.obs || '' };
   });
   const ws = XLSX.utils.json_to_sheet(data);
   const wb = XLSX.utils.book_new();
