@@ -1433,7 +1433,19 @@ function renderPdfPreview() {
     <thead><tr><th>Archivo</th><th>Tipo</th><th>Nº</th><th>Fecha</th><th>CUIT</th><th>Importe</th><th>Cliente</th><th>Extra</th><th>Importar</th></tr></thead>
     <tbody>${pendingPdfImports.map((p,i) => {
       if (p.error) {
-        return `<tr><td>${p.filename}</td><td colspan="7" style="color:var(--bad)">${p.error}</td><td><button class="btn btn-sm btn-danger" onclick="removePdfImport(${i})">×</button></td></tr>`;
+        // Inferir info del nombre para mostrarla en el error
+        const info = parseNombreArchivo(p.filename);
+        const sugerido = info.nombreCliente || info.fecha
+          ? `<div class="small-label" style="margin-top:4px">Sugerido del nombre: ${info.nombreCliente || '–'}${info.fecha ? ' · ' + fmtDate(info.fecha) : ''}</div>`
+          : '';
+        return `<tr style="background:#fef3c7">
+          <td>${p.filename}${sugerido}</td>
+          <td colspan="7" style="color:#92400e;font-size:12px">⚠ ${p.error}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-sm btn-success" onclick="abrirComoFcXManual(${i})" style="margin-right:4px">📝 Cargar manual</button>
+            <button class="btn btn-sm btn-danger" onclick="removePdfImport(${i})">×</button>
+          </td>
+        </tr>`;
       }
       const extras = [];
       if (p.formaPago) extras.push(`<span class="small-label">FP: ${p.formaPago}</span>`);
@@ -1482,7 +1494,6 @@ function guessCliente(p) {
     const nombreNorm = p.nombreCliente.toLowerCase().replace(/[.,]/g, '').trim();
     const c = state.clientes.find(x => {
       const razNorm = (x.razonSocial || '').toLowerCase().replace(/[.,]/g, '').trim();
-      // Match exacto o uno contiene al otro (al menos 6 caracteres en común)
       if (razNorm === nombreNorm) return true;
       if (nombreNorm.length >= 6 && razNorm.includes(nombreNorm)) return true;
       if (razNorm.length >= 6 && nombreNorm.includes(razNorm)) return true;
@@ -1491,6 +1502,71 @@ function guessCliente(p) {
     if (c) return c.id;
   }
   return '';
+}
+
+// Extrae info del nombre del archivo cuando el PDF es escaneado y no se pudo leer.
+// Ej: "Rto.Interno El Mataco 04.05.26.pdf" → { fecha: 2026-05-04, nombreCliente: "El Mataco" }
+function parseNombreArchivo(filename) {
+  const out = {};
+  const base = filename.replace(/\.pdf$/i, '');
+  // Buscar fecha al final: dd.mm.yy, dd-mm-yy, dd_mm_yy, dd/mm/yy
+  const fechaM = base.match(/(\d{1,2})[\.\-_\/](\d{1,2})[\.\-_\/](\d{2,4})/);
+  if (fechaM) {
+    let [_, d, mo, y] = fechaM;
+    if (y.length === 2) y = '20' + y;
+    out.fecha = `${y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    // Nombre del cliente: lo que está antes de la fecha
+    let beforeDate = base.substring(0, fechaM.index).trim();
+    // Limpiar prefijos típicos: "Rto Interno", "Remito", "Factura", "FC X", "FC", "Nro", etc.
+    beforeDate = beforeDate
+      .replace(/^(fc[\.\s_-]+x|fcx|factura[\.\s_-]+x)[\.\s_-]+/gi, '')  // FC X específico
+      .replace(/^(rto\.?|remito|factura|fc|nro\.?|nrointerno|interno|movimiento)[\.\s_-]+/gi, '')
+      .replace(/^(rto\.?|remito|interno|movimiento)[\.\s_-]+/gi, '')  // segundo pase
+      .replace(/[\._]+/g, ' ')
+      .trim();
+    out.nombreCliente = beforeDate;
+  } else {
+    // No hay fecha en el nombre; intentar usar todo el nombre como cliente
+    out.nombreCliente = base
+      .replace(/^(rto\.?|remito|factura|fc|fcx|nro\.?|interno)[\.\s_-]+/gi, '')
+      .replace(/[\._]+/g, ' ')
+      .trim();
+  }
+  return out;
+}
+
+// Abre el modal "Nuevo Comprobante" como FC X con datos inferidos del nombre del archivo
+function abrirComoFcXManual(idx) {
+  const p = pendingPdfImports[idx];
+  if (!p) return;
+  const info = parseNombreArchivo(p.filename);
+  // Quitar el archivo del pending (ya lo "estamos resolviendo")
+  pendingPdfImports.splice(idx, 1);
+  renderPdfPreview();
+  // Cambiar a la pestaña Comprobantes y abrir el modal
+  setTab('comprobantes');
+  setTimeout(() => {
+    openCompModal();
+    document.getElementById('compTipo').value = 'FC_X';
+    if (info.fecha) document.getElementById('compFecha').value = info.fecha;
+    // Intentar matchear cliente por nombre
+    if (info.nombreCliente) {
+      const cliId = guessCliente({ nombreCliente: info.nombreCliente });
+      if (cliId) {
+        document.getElementById('compCliente').value = cliId;
+        onCompClienteChange();
+      } else {
+        // Cliente no encontrado — dejar nota
+        document.getElementById('compObs').value =
+          `Del archivo: "${p.filename}". Cliente "${info.nombreCliente}" no encontrado automáticamente — seleccionalo manualmente arriba.`;
+      }
+    }
+    updateCompVtoCalc();
+    // Aviso visual
+    setTimeout(() => {
+      alert(`📝 Cargando FC X manualmente.\n\nDatos del archivo:\n• Nombre: ${p.filename}\n• Cliente sugerido: ${info.nombreCliente || '—'}\n• Fecha sugerida: ${info.fecha ? fmtDate(info.fecha) : '—'}\n\nAbrí el PDF en otra ventana para ver el número y el importe, después completá los campos.`);
+    }, 200);
+  }, 100);
 }
 function removePdfImport(idx) { pendingPdfImports.splice(idx, 1); renderPdfPreview(); }
 function confirmPdfImport() {
