@@ -309,6 +309,7 @@
       <div class="form-row"><label>Tipo</label><select id="compTipo" onchange="onCompTipoChange()"><option value="FC_A">Factura A</option><option value="FC_B">Factura B</option><option value="FC_C">Factura C</option><option value="FC_X">FC X</option></select></div>
       <div class="form-row"><label>Cliente</label><select id="compCliente" onchange="onCompClienteChange()"></select></div>
     </div>
+    <div id="compContactoBox" style="display:none;margin:-4px 0 8px;padding:10px 12px;background:#eff6ff;border-left:3px solid var(--accent);border-radius:6px;font-size:12px"></div>
     <div class="form-grid-2">
       <div class="form-row"><label>Pto. Venta</label><input id="compPtoVenta" placeholder="0001"></div>
       <div class="form-row"><label>Número</label><input id="compNumero" placeholder="00012345"></div>
@@ -782,14 +783,45 @@ function openCompModal(id) {
   document.getElementById('compObs').value = c?.obs || '';
   document.getElementById('compDelBtn').style.display = id ? '' : 'none';
   document.getElementById('compPagoBtn').style.display = id ? '' : 'none';
-  updateCompVtoCalc(); renderPagosInModal(c);
+  updateCompVtoCalc(); renderPagosInModal(c); renderContactoBox();
   document.getElementById('compModalBg').classList.add('show');
 }
 function closeCompModal() { document.getElementById('compModalBg').classList.remove('show'); }
 function onImporteChange() { if (!editingCompId) document.getElementById('compSaldo').value = document.getElementById('compImporte').value; }
 
 function onCompTipoChange() { updateCompVtoCalc(); }
-function onCompClienteChange() { updateCompVtoCalc(); }
+function onCompClienteChange() { updateCompVtoCalc(); renderContactoBox(); }
+
+// Muestra el contacto del cliente seleccionado en el modal del comprobante
+function renderContactoBox() {
+  const cliId = document.getElementById('compCliente').value;
+  const box = document.getElementById('compContactoBox');
+  if (!cliId) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const cli = state.clientes.find(c => c.id === cliId);
+  if (!cli) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  // Migración del campo viejo "contacto" si los nuevos están vacíos
+  const nombre = cli.contactoNombre || (cli.contacto && !cli.contacto.includes('@') ? cli.contacto : '');
+  const email = cli.contactoEmail || (cli.contacto && cli.contacto.includes('@') ? cli.contacto : '');
+  const tel = cli.contactoTelefono || '';
+  const cargo = cli.contactoCargo || '';
+  // Si no hay nada, mostrar mensaje de "sin contacto"
+  if (!nombre && !email && !tel && !cargo) {
+    box.style.display = 'block';
+    box.style.background = '#fef3c7';
+    box.style.borderLeftColor = 'var(--warn)';
+    box.innerHTML = `⚠ Este cliente no tiene contacto cargado. <a href="#" onclick="event.preventDefault();const cli=state.clientes.find(c=>c.id==='${cli.id}');if(cli){closeCompModal();setTimeout(()=>openClienteModal('${cli.id}'),100);}" style="color:var(--accent);font-weight:500">Agregar contacto</a>`;
+    return;
+  }
+  box.style.display = 'block';
+  box.style.background = '#eff6ff';
+  box.style.borderLeftColor = 'var(--accent)';
+  const parts = [];
+  if (nombre) parts.push(`<b>${nombre}</b>`);
+  if (cargo) parts.push(`<span style="color:var(--muted)">${cargo}</span>`);
+  if (email) parts.push(`📧 <a href="mailto:${email}" style="color:var(--accent)">${email}</a>`);
+  if (tel) parts.push(`📞 ${tel}`);
+  box.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">${parts.join('<span style="color:#cbd5e1">|</span>')}</div>`;
+}
 
 function updateCompVtoCalc() {
   // Simular el cálculo con los datos del form
@@ -1196,14 +1228,30 @@ function renderDashboard() {
     Object.entries(byVend).sort((a,b) => b[1].total - a[1].total).map(([v,d]) =>
       `<tr><td><b>${v}</b></td><td class="num">${d.cant}</td><td class="num">${fmtMoney(d.total)}</td><td class="num" style="color:${d.vencido > 0 ? 'var(--bad)' : 'inherit'}">${fmtMoney(d.vencido)}</td></tr>`
     ).join('') + '</tbody></table>';
+
+  // Helper: HTML del cliente con contacto opcional (nombre y email)
+  const cliCellHtml = (cli) => {
+    if (!cli) return '?';
+    const nombre = cli.contactoNombre || (cli.contacto && !cli.contacto.includes('@') ? cli.contacto : '') || '';
+    const email = cli.contactoEmail || (cli.contacto && cli.contacto.includes('@') ? cli.contacto : '') || '';
+    let html = `<div>${cli.razonSocial}</div>`;
+    if (nombre || email) {
+      const parts = [];
+      if (nombre) parts.push(nombre);
+      if (email) parts.push(`<a href="mailto:${email}" onclick="event.stopPropagation()" style="color:var(--accent)">${email}</a>`);
+      html += `<div class="small-label">${parts.join(' · ')}</div>`;
+    }
+    return html;
+  };
+
   const px = pend.filter(c => { const d = diasParaVencer(c); return d !== null && d >= 0 && d <= 15; }).sort((a,b) => (a._vto || '').localeCompare(b._vto || ''));
   document.getElementById('proximosVenc').innerHTML = px.length === 0 ? '<div class="small-label">Nada en los próximos 15 días</div>' :
-    '<table><thead><tr><th>Vto.</th><th>Cliente</th><th>Vendedor</th><th>Comp.</th><th class="num">Saldo</th></tr></thead><tbody>' +
-    px.map(c => `<tr onclick="openCompModal('${c.id}')" style="cursor:pointer"><td>${fmtDate(c._vto)} <span class="small-label">(${diasParaVencer(c)}d)</span></td><td>${c._cli?.razonSocial || '?'}</td><td>${c._cli?.vendedor || '–'}</td><td>${c.tipo.replace('FC_','')} ${c.ptoVenta||''}-${c.numero||''}</td><td class="num">${fmtMoney(c.saldo)}</td></tr>`).join('') + '</tbody></table>';
+    '<table><thead><tr><th>Vto.</th><th>Cliente / Contacto</th><th>Vendedor</th><th>Comp.</th><th class="num">Saldo</th></tr></thead><tbody>' +
+    px.map(c => `<tr onclick="openCompModal('${c.id}')" style="cursor:pointer"><td>${fmtDate(c._vto)} <span class="small-label">(${diasParaVencer(c)}d)</span></td><td>${cliCellHtml(c._cli)}</td><td>${c._cli?.vendedor || '–'}</td><td>${c.tipo.replace('FC_','')} ${c.ptoVenta||''}-${c.numero||''}</td><td class="num">${fmtMoney(c.saldo)}</td></tr>`).join('') + '</tbody></table>';
   const venc = pend.filter(c => c._estado === 'vencido').sort((a,b) => (a._vto || '').localeCompare(b._vto || ''));
   document.getElementById('vencidos').innerHTML = venc.length === 0 ? '<div class="small-label">Sin vencidos 🎉</div>' :
-    '<table><thead><tr><th>Vto.</th><th>Días vencido</th><th>Cliente</th><th>Vendedor</th><th>Comp.</th><th class="num">Saldo</th></tr></thead><tbody>' +
-    venc.map(c => `<tr onclick="openCompModal('${c.id}')" style="cursor:pointer"><td>${fmtDate(c._vto)}</td><td><span class="badge badge-bad">${-diasParaVencer(c)}d</span></td><td>${c._cli?.razonSocial || '?'}</td><td>${c._cli?.vendedor || '–'}</td><td>${c.tipo.replace('FC_','')} ${c.ptoVenta||''}-${c.numero||''}</td><td class="num">${fmtMoney(c.saldo)}</td></tr>`).join('') + '</tbody></table>';
+    '<table><thead><tr><th>Vto.</th><th>Días vencido</th><th>Cliente / Contacto</th><th>Vendedor</th><th>Comp.</th><th class="num">Saldo</th></tr></thead><tbody>' +
+    venc.map(c => `<tr onclick="openCompModal('${c.id}')" style="cursor:pointer"><td>${fmtDate(c._vto)}</td><td><span class="badge badge-bad">${-diasParaVencer(c)}d</span></td><td>${cliCellHtml(c._cli)}</td><td>${c._cli?.vendedor || '–'}</td><td>${c.tipo.replace('FC_','')} ${c.ptoVenta||''}-${c.numero||''}</td><td class="num">${fmtMoney(c.saldo)}</td></tr>`).join('') + '</tbody></table>';
 }
 
 let pendingPdfImports = [];
