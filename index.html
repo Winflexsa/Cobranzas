@@ -229,6 +229,11 @@
         <div class="form-row"><label>JSONBin – Bin ID</label><input id="cfgBinId" placeholder="ej: 6543abc..." onchange="saveConfig()"></div>
         <div class="form-row"><label>JSONBin – Master Key</label><input id="cfgApiKey" placeholder="$2a$10$..." type="password" onchange="saveConfig()"></div>
         <div class="form-row"><label>Emails destinatarios del resumen (separados por coma)</label><input id="cfgEmails" placeholder="matias@winflex.com.ar, mirta@winflex.com.ar" onchange="saveConfig()"></div>
+        <hr>
+        <h3 style="font-size:14px;margin:0 0 8px">Integración con otras apps</h3>
+        <div class="form-row"><label>URL app Cheques</label><input id="cfgUrlCheques" placeholder="https://winflexsa.github.io/winflex-cheques/" onchange="saveConfig()"></div>
+        <div class="form-row"><label>URL app Caja 2</label><input id="cfgUrlCaja2" placeholder="https://winflexsa.github.io/..." onchange="saveConfig()"></div>
+        <hr>
         <div class="form-row"><label>Mapeo de columnas Excel (se guarda al primer import)</label><textarea id="cfgMapeo" rows="4" readonly></textarea></div>
         <div class="form-row">
           <button class="btn" onclick="loadFromBin()">Recargar desde JSONBin</button>
@@ -244,7 +249,7 @@
         </div>
         <div id="dupReport"></div>
         <hr>
-        <div class="small-label">v1.3 — Detección automática de duplicados al cargar/importar comprobantes.</div>
+        <div class="small-label">v1.4 — Integración con app de Cheques vía botón "Enviar a app".</div>
       </div>
     </section>
   </main>
@@ -356,6 +361,11 @@
       <textarea id="pagoObs" rows="2"></textarea>
     </div>
 
+    <div id="pagoCaja2Section" style="display:none;background:#f0fdf4;border:1px solid #16a34a;border-radius:8px;padding:12px;margin-bottom:12px">
+      <div style="font-size:13px;margin-bottom:8px"><b>Esta cobranza es de una FC X</b> — podés enviarla a la app de Caja 2.</div>
+      <button type="button" class="btn btn-sm btn-success" onclick="enviarPagoACaja2()">📤 Cargar pago completo en Caja 2</button>
+    </div>
+
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closePagoModal()">Cancelar</button>
       <button class="btn btn-success" onclick="savePago()">Guardar pago</button>
@@ -381,7 +391,7 @@ document.getElementById('pinInput').addEventListener('keypress', e => { if (e.ke
 const LS_KEY = 'winflex_cobranzas_v1';
 const CFG_KEY = 'winflex_cobranzas_cfg';
 let state = { clientes: [], comprobantes: [], meta: { version: 1 } };
-let config = { binId: '', apiKey: '', mapeoExcel: null, emails: '' };
+let config = { binId: '', apiKey: '', mapeoExcel: null, emails: '', urlChequesApp: 'https://winflexsa.github.io/winflex-cheques/', urlCaja2App: '' };
 let _saving = false;
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 
@@ -430,6 +440,8 @@ function saveConfig() {
   config.binId = document.getElementById('cfgBinId').value.trim();
   config.apiKey = document.getElementById('cfgApiKey').value.trim();
   config.emails = document.getElementById('cfgEmails').value.trim();
+  config.urlChequesApp = document.getElementById('cfgUrlCheques').value.trim();
+  config.urlCaja2App = document.getElementById('cfgUrlCaja2').value.trim();
   localStorage.setItem(CFG_KEY, JSON.stringify(config));
   setSyncStatus('Config guardada', 'ok');
 }
@@ -778,6 +790,8 @@ function openPagoModal() {
   document.getElementById('pagoNumeroRecibo').value = '';
   document.getElementById('pagoSaldoFc').value = c?.saldo || 0;
   document.getElementById('pagoObs').value = '';
+  // Mostrar sección Caja 2 solo si es FC X
+  document.getElementById('pagoCaja2Section').style.display = (c?.tipo === 'FC_X') ? 'block' : 'none';
   renderPagoItems();
   document.getElementById('pagoModalBg').classList.add('show');
 }
@@ -807,6 +821,81 @@ function addPagoItem(tipo) {
 function removePagoItem(itemId) {
   currentPagoItems = currentPagoItems.filter(it => it._id !== itemId);
   renderPagoItems();
+}
+
+// ============================================================
+// INTEGRACIÓN CON APPS EXTERNAS — vía localStorage compartido
+// ============================================================
+function enviarChequeAApp(itemId) {
+  const it = currentPagoItems.find(x => x._id === itemId);
+  if (!it) { alert('Item no encontrado'); return; }
+  if (!it.monto || it.monto <= 0) { alert('Cargá el monto del cheque antes de enviarlo'); return; }
+  if (!config.urlChequesApp) { alert('Falta configurar la URL de la app de Cheques en Config'); return; }
+
+  const comp = state.comprobantes.find(x => x.id === editingCompId);
+  const cli = state.clientes.find(cl => cl.id === comp?.clienteId);
+  // Caja según tipo de FC: FC X → caja2; resto → caja1
+  const caja = comp?.tipo === 'FC_X' ? 'caja2' : 'caja1';
+
+  const prefill = {
+    _ts: Date.now(),
+    cliente: cli?.razonSocial || '',
+    importe: it.monto,
+    banco: it.banco || '',
+    numero: it.numero || '',
+    fecha_recibo: document.getElementById('pagoFecha').value || new Date().toISOString().slice(0,10),
+    fecha_cobro: it.fechaCobro || '',
+    plaza: '',
+    cuit: cli?.cuit || '',
+    recibo: document.getElementById('pagoNumeroRecibo').value || '',
+    caja: caja,
+    _from: 'cobranzas'
+  };
+  try {
+    localStorage.setItem('winflex_prefill_cheque', JSON.stringify(prefill));
+    window.open(config.urlChequesApp, '_blank');
+  } catch (e) {
+    alert('Error al preparar datos: ' + e.message);
+  }
+}
+
+function enviarPagoACaja2() {
+  if (!editingCompId) return;
+  if (currentPagoItems.length === 0) { alert('Agregá al menos un instrumento de pago primero'); return; }
+  if (!config.urlCaja2App) { alert('Falta configurar la URL de la app de Caja 2 en Config'); return; }
+
+  const comp = state.comprobantes.find(x => x.id === editingCompId);
+  const cli = state.clientes.find(cl => cl.id === comp?.clienteId);
+
+  // Sumar montos por tipo
+  let totalEfectivo = 0, totalTransf = 0, totalCheques = 0;
+  currentPagoItems.forEach(it => {
+    const m = parseFloat(it.monto) || 0;
+    if (it.tipo === 'efectivo') totalEfectivo += m;
+    else if (it.tipo === 'transferencia') totalTransf += m;
+    else if (it.tipo === 'cheque' || it.tipo === 'echeq') totalCheques += m;
+  });
+  if (totalEfectivo + totalTransf + totalCheques === 0) {
+    alert('Cargá montos en los instrumentos antes de enviar');
+    return;
+  }
+
+  const prefill = {
+    _ts: Date.now(),
+    fecha: document.getElementById('pagoFecha').value || new Date().toISOString().slice(0,10),
+    cliente: cli?.razonSocial || '',
+    concepto: '',  // el usuario lo elige en Caja 2 (Flexibles/Bandejas/Pet/Amcor)
+    efectivo: totalEfectivo,
+    transferencia: totalTransf,
+    cheques: totalCheques,
+    _from: 'cobranzas'
+  };
+  try {
+    localStorage.setItem('winflex_prefill_caja2', JSON.stringify(prefill));
+    window.open(config.urlCaja2App, '_blank');
+  } catch (e) {
+    alert('Error al preparar datos: ' + e.message);
+  }
 }
 
 function updatePagoItemField(itemId, field, value) {
@@ -840,7 +929,8 @@ function renderPagoItems() {
         <div class="form-row"><label>Fecha emisión</label><input type="date" value="${it.fechaEmision || ''}" oninput="updatePagoItemField('${it._id}','fechaEmision',this.value)"></div>
         <div class="form-row"><label>Fecha de cobro / pago</label><input type="date" value="${it.fechaCobro || ''}" oninput="updatePagoItemField('${it._id}','fechaCobro',this.value)"></div>
       </div>
-      <div class="form-row"><label>Observaciones</label><input value="${it.obs || ''}" oninput="updatePagoItemField('${it._id}','obs',this.value)"></div>`;
+      <div class="form-row"><label>Observaciones</label><input value="${it.obs || ''}" oninput="updatePagoItemField('${it._id}','obs',this.value)"></div>
+      <div style="margin-top:6px"><button type="button" class="btn btn-sm" style="background:#7c3aed" onclick="enviarChequeAApp('${it._id}')">📤 Cargar en app Cheques</button></div>`;
     } else if (it.tipo === 'transferencia') {
       body = `<div class="form-grid-2">
         <div class="form-row"><label>Monto</label>
@@ -1594,6 +1684,8 @@ function init() {
   document.getElementById('cfgBinId').value = config.binId || '';
   document.getElementById('cfgApiKey').value = config.apiKey || '';
   document.getElementById('cfgEmails').value = config.emails || '';
+  document.getElementById('cfgUrlCheques').value = config.urlChequesApp || 'https://winflexsa.github.io/winflex-cheques/';
+  document.getElementById('cfgUrlCaja2').value = config.urlCaja2App || '';
   document.getElementById('cfgMapeo').value = config.mapeoExcel ? JSON.stringify(config.mapeoExcel, null, 2) : '';
   renderAll();
   if (config.binId && config.apiKey) loadFromBin();
