@@ -193,6 +193,10 @@
         <div class="toolbar">
           <input id="filtroCli" placeholder="Buscar..." oninput="renderClientes()">
           <select id="filtroCliVendedor" onchange="renderClientes()"></select>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+            <input type="checkbox" id="filtroCliConSaldo" onchange="renderClientes()">
+            Solo con saldo
+          </label>
           <button class="btn" onclick="openClienteModal()">+ Nuevo Cliente</button>
         </div>
         <div style="overflow-x:auto">
@@ -201,6 +205,7 @@
             <tbody id="cliBody"></tbody>
           </table>
         </div>
+        <div id="cliTotales" style="margin-top:12px;font-size:13px"></div>
       </div>
     </section>
     <section class="tab" id="tab-importar">
@@ -287,6 +292,7 @@
       <button class="btn btn-secondary" onclick="closeCliModal()">Cancelar</button>
       <button class="btn" onclick="saveCliente()">Guardar</button>
     </div>
+    <div id="cliHistorial" style="margin-top:20px"></div>
   </div>
 </div>
 
@@ -593,9 +599,111 @@ function openClienteModal(id) {
   document.getElementById('cliContacto').value = c?.contacto || '';
   document.getElementById('cliObs').value = c?.obs || '';
   document.getElementById('cliDelBtn').style.display = id ? '' : 'none';
+  renderHistorialCliente(c);
   document.getElementById('cliModalBg').classList.add('show');
 }
 function closeCliModal() { document.getElementById('cliModalBg').classList.remove('show'); }
+
+// Historial completo del cliente — comprobantes + pagos
+function renderHistorialCliente(cli) {
+  const div = document.getElementById('cliHistorial');
+  if (!cli) { div.innerHTML = ''; return; }
+  const comps = state.comprobantes
+    .filter(c => c.clienteId === cli.id)
+    .sort((a,b) => (b.fecha || '').localeCompare(a.fecha || ''));
+  if (comps.length === 0) {
+    div.innerHTML = '<div class="small-label" style="padding:12px;background:#f9fafb;border-radius:8px;text-align:center">Este cliente todavía no tiene comprobantes cargados.</div>';
+    return;
+  }
+  // Totales
+  const totalFact = comps.reduce((s,c) => s + (c.importe || 0), 0);
+  const totalPend = comps.reduce((s,c) => s + (c.saldo || 0), 0);
+  const totalCobr = totalFact - totalPend;
+  const cantCobradas = comps.filter(c => estadoComp(c) === 'cobrado').length;
+  const cantVencidas = comps.filter(c => estadoComp(c) === 'vencido').length;
+  // Build HTML
+  let html = '<hr><h3 style="font-size:14px;margin:12px 0 10px">Historial del cliente</h3>';
+  html += `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:12px">
+    <div style="padding:10px;background:#f9fafb;border-radius:6px;border-left:3px solid var(--accent)">
+      <div class="small-label">Total facturado</div>
+      <div style="font-weight:700;font-size:15px">${fmtMoney(totalFact)}</div>
+    </div>
+    <div style="padding:10px;background:#f9fafb;border-radius:6px;border-left:3px solid var(--ok)">
+      <div class="small-label">Total cobrado</div>
+      <div style="font-weight:700;font-size:15px;color:var(--ok)">${fmtMoney(totalCobr)}</div>
+    </div>
+    <div style="padding:10px;background:#f9fafb;border-radius:6px;border-left:3px solid ${totalPend > 0 ? 'var(--bad)' : 'var(--ok)'}">
+      <div class="small-label">Saldo pendiente</div>
+      <div style="font-weight:700;font-size:15px;color:${totalPend > 0 ? 'var(--bad)' : 'inherit'}">${fmtMoney(totalPend)}</div>
+    </div>
+    <div style="padding:10px;background:#f9fafb;border-radius:6px">
+      <div class="small-label">Comprobantes</div>
+      <div style="font-weight:700;font-size:15px">${comps.length} <span class="small-label" style="font-weight:400">(${cantCobradas} cobrados${cantVencidas > 0 ? ', '+cantVencidas+' vencidos' : ''})</span></div>
+    </div>
+  </div>`;
+  // Tabla de comprobantes
+  html += `<div style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+  <table style="font-size:12px"><thead><tr>
+    <th>Fecha</th><th>Tipo</th><th>Número</th><th>Vto.</th>
+    <th class="num">Importe</th><th class="num">Saldo</th><th>Estado</th><th>Pagos</th>
+  </tr></thead><tbody>`;
+  comps.forEach(c => {
+    const est = estadoComp(c);
+    const vto = calcVencimiento(c);
+    const pagosTxt = (c.pagos || []).length > 0
+      ? (c.pagos || []).map(p => `${fmtDate(p.fecha)}: ${fmtMoney(p.importe || 0)}`).join('<br>')
+      : '<span class="small-label">—</span>';
+    html += `<tr style="cursor:pointer" onclick="closeCliModal();setTimeout(()=>openCompModal('${c.id}'),100)">
+      <td>${fmtDate(c.fecha)}</td>
+      <td><span class="badge badge-grey">${c.tipo.replace('FC_','')}</span></td>
+      <td>${c.ptoVenta ? c.ptoVenta + '-' : ''}${c.numero || '–'}</td>
+      <td>${fmtDate(vto)}</td>
+      <td class="num">${fmtMoney(c.importe)}</td>
+      <td class="num">${fmtMoney(c.saldo)}</td>
+      <td>${badgeEstado(est)}</td>
+      <td style="font-size:11px">${pagosTxt}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  html += '<div class="small-label" style="margin-top:6px">Click en una fila para abrir el comprobante.</div>';
+  div.innerHTML = html;
+}
+
+function renderClientes() {
+  const q = (document.getElementById('filtroCli').value || '').toLowerCase();
+  const vend = document.getElementById('filtroCliVendedor').value;
+  const soloConSaldo = document.getElementById('filtroCliConSaldo').checked;
+  // Calcular saldo de cada cliente una vez
+  const saldoPorCli = {};
+  state.comprobantes.forEach(c => {
+    saldoPorCli[c.clienteId] = (saldoPorCli[c.clienteId] || 0) + (c.saldo || 0);
+  });
+  const filtered = state.clientes.filter(c => {
+    if (vend && c.vendedor !== vend) return false;
+    if (soloConSaldo && (saldoPorCli[c.id] || 0) < 0.01) return false;
+    if (!q) return true;
+    return (c.razonSocial + ' ' + c.codigo + ' ' + (c.cuit||'')).toLowerCase().includes(q);
+  }).sort((a,b) => (saldoPorCli[b.id] || 0) - (saldoPorCli[a.id] || 0));
+  document.getElementById('cliBody').innerHTML = filtered.map(c => {
+    const saldo = saldoPorCli[c.id] || 0;
+    const condA = (c.condicionDias === 0 ? 'Contado' : (c.condicionDias || 30) + 'd') + ' / ' + (c.modoVencimiento === 'remito' ? 'rem' : 'fc');
+    const condX = (c.condicionDiasFcX != null && c.condicionDiasFcX !== '')
+      ? ((c.condicionDiasFcX === 0 ? 'Contado' : c.condicionDiasFcX + 'd') + ' / ' + ((c.modoVencimientoFcX || c.modoVencimiento) === 'remito' ? 'rem' : 'fc'))
+      : '<span class="small-label">(=FC A)</span>';
+    return `<tr onclick="openClienteModal('${c.id}')" style="cursor:pointer">
+      <td>${c.codigo || '–'}</td><td>${c.razonSocial}</td><td>${c.cuit || '–'}</td>
+      <td>${c.vendedor}</td>
+      <td><span class="small-label">${condA}</span></td>
+      <td>${condX}</td>
+      <td class="num"${saldo > 0 ? ' style="font-weight:600"' : ''}>${fmtMoney(saldo)}</td>
+      <td><button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();openClienteModal('${c.id}')">Ver / Editar</button></td>
+    </tr>`;
+  }).join('');
+  // Totales
+  const totalSaldo = filtered.reduce((s, c) => s + (saldoPorCli[c.id] || 0), 0);
+  document.getElementById('cliTotales').innerHTML =
+    `<b>${filtered.length}</b> cliente${filtered.length !== 1 ? 's' : ''} · Saldo total: <b>${fmtMoney(totalSaldo)}</b>`;
+}
 function saveCliente() {
   const fcXDias = document.getElementById('cliCondicionFcX').value;
   const fcXModo = document.getElementById('cliModoFcX').value;
@@ -622,30 +730,6 @@ function deleteCliente() {
   if (!confirm('¿Eliminar cliente?')) return;
   state.clientes = state.clientes.filter(c => c.id !== editingCliId);
   closeCliModal(); saveToBin(); renderAll();
-}
-function renderClientes() {
-  const q = (document.getElementById('filtroCli').value || '').toLowerCase();
-  const vend = document.getElementById('filtroCliVendedor').value;
-  const filtered = state.clientes.filter(c => {
-    if (vend && c.vendedor !== vend) return false;
-    if (!q) return true;
-    return (c.razonSocial + ' ' + c.codigo + ' ' + (c.cuit||'')).toLowerCase().includes(q);
-  }).sort((a,b) => a.razonSocial.localeCompare(b.razonSocial));
-  document.getElementById('cliBody').innerHTML = filtered.map(c => {
-    const saldo = state.comprobantes.filter(x => x.clienteId === c.id).reduce((s,x) => s + (x.saldo || 0), 0);
-    const condA = (c.condicionDias === 0 ? 'Contado' : (c.condicionDias || 30) + 'd') + ' / ' + (c.modoVencimiento === 'remito' ? 'rem' : 'fc');
-    const condX = (c.condicionDiasFcX != null && c.condicionDiasFcX !== '')
-      ? ((c.condicionDiasFcX === 0 ? 'Contado' : c.condicionDiasFcX + 'd') + ' / ' + ((c.modoVencimientoFcX || c.modoVencimiento) === 'remito' ? 'rem' : 'fc'))
-      : '<span class="small-label">(=FC A)</span>';
-    return `<tr onclick="openClienteModal('${c.id}')" style="cursor:pointer">
-      <td>${c.codigo || '–'}</td><td>${c.razonSocial}</td><td>${c.cuit || '–'}</td>
-      <td>${c.vendedor}</td>
-      <td><span class="small-label">${condA}</span></td>
-      <td>${condX}</td>
-      <td class="num">${fmtMoney(saldo)}</td>
-      <td><button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();openClienteModal('${c.id}')">Editar</button></td>
-    </tr>`;
-  }).join('');
 }
 
 let editingCompId = null;
