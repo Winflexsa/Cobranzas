@@ -201,7 +201,7 @@
         </div>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr><th>Código</th><th>Razón Social</th><th>CUIT</th><th>Vendedor</th><th>Cond. FC A/B/C</th><th>Cond. FC X</th><th class="num">Saldo</th><th></th></tr></thead>
+            <thead><tr><th>Código</th><th>Razón Social</th><th>CUIT</th><th>Vendedor</th><th>Contacto</th><th>Cond. FC A/B/C</th><th>Cond. FC X</th><th class="num">Saldo</th><th></th></tr></thead>
             <tbody id="cliBody"></tbody>
           </table>
         </div>
@@ -210,8 +210,8 @@
     </section>
     <section class="tab" id="tab-importar">
       <div class="card">
-        <h2>📄 Importar facturas oficiales (PDF)</h2>
-        <p class="small-label">Subí uno o varios PDFs de facturas (A/B/C). El sistema intenta extraer los datos; revisalos antes de confirmar.</p>
+        <h2>📄 Importar comprobantes (PDF)</h2>
+        <p class="small-label">Subí uno o varios PDFs: facturas electrónicas (FC A/B/C) o remitos / FC X. El sistema intenta extraer los datos; revisalos antes de confirmar.</p>
         <div class="upload-area" id="pdfDrop" onclick="document.getElementById('pdfInput').click()">
           <div style="font-size:28px">📄</div><div>Click o arrastrá los PDFs acá</div>
         </div>
@@ -219,8 +219,8 @@
         <div id="pdfPreview"></div>
       </div>
       <div class="card">
-        <h2>📊 Importar remitos (Excel)</h2>
-        <p class="small-label">Subí el Excel de remitos. Te pide mapear las columnas la primera vez.</p>
+        <h2>📊 Importar remitos en lote (Excel)</h2>
+        <p class="small-label">Alternativa para cargar muchos remitos juntos desde un Excel. Te pide mapear las columnas la primera vez.</p>
         <div class="upload-area" id="xlsDrop" onclick="document.getElementById('xlsInput').click()">
           <div style="font-size:28px">📊</div><div>Click o arrastrá el Excel acá</div>
         </div>
@@ -268,10 +268,16 @@
       <div class="form-row"><label>CUIT</label><input id="cliCuit"></div>
     </div>
     <div class="form-row"><label>Razón Social</label><input id="cliRazon"></div>
+    <div class="form-row" style="max-width:50%"><label>Vendedor</label><select id="cliVendedor"><option>Enrique</option><option>Matías</option><option>Winflex</option><option>Vicente</option></select></div>
+
+    <div class="section-title">Contacto principal</div>
     <div class="form-grid-2">
-      <div class="form-row"><label>Vendedor</label><select id="cliVendedor"><option>Enrique</option><option>Matías</option><option>Winflex</option><option>Vicente</option></select></div>
-      <div class="form-row"><label>Contacto / Email</label><input id="cliContacto"></div>
+      <div class="form-row"><label>Nombre</label><input id="cliContactoNombre" placeholder="Ej: Juan Pérez"></div>
+      <div class="form-row"><label>Cargo / Posición</label><input id="cliContactoCargo" placeholder="Ej: Compras, Pagos, Gerencia"></div>
+      <div class="form-row"><label>Email</label><input id="cliContactoEmail" type="email" placeholder="juan@empresa.com"></div>
+      <div class="form-row"><label>Teléfono</label><input id="cliContactoTelefono" placeholder="11-1234-5678"></div>
     </div>
+    <p class="small-label" style="margin-top:-8px">Otros contactos o notas adicionales se pueden poner en "Observaciones" abajo.</p>
 
     <div class="section-title">Condición para Factura A / B / C</div>
     <div class="form-grid-2">
@@ -596,7 +602,17 @@ function openClienteModal(id) {
   document.getElementById('cliModo').value = c?.modoVencimiento || 'factura';
   document.getElementById('cliCondicionFcX').value = c?.condicionDiasFcX ?? '';
   document.getElementById('cliModoFcX').value = c?.modoVencimientoFcX || '';
-  document.getElementById('cliContacto').value = c?.contacto || '';
+  // Migración: si tiene el campo viejo "contacto" pero no los nuevos, ponerlo en Nombre
+  let nombre = c?.contactoNombre, email = c?.contactoEmail, tel = c?.contactoTelefono, cargo = c?.contactoCargo;
+  if (!nombre && !email && !tel && !cargo && c?.contacto) {
+    // Intentar detectar si el valor viejo era email
+    if (c.contacto.includes('@')) email = c.contacto;
+    else nombre = c.contacto;
+  }
+  document.getElementById('cliContactoNombre').value = nombre || '';
+  document.getElementById('cliContactoEmail').value = email || '';
+  document.getElementById('cliContactoTelefono').value = tel || '';
+  document.getElementById('cliContactoCargo').value = cargo || '';
   document.getElementById('cliObs').value = c?.obs || '';
   document.getElementById('cliDelBtn').style.display = id ? '' : 'none';
   renderHistorialCliente(c);
@@ -690,9 +706,17 @@ function renderClientes() {
     const condX = (c.condicionDiasFcX != null && c.condicionDiasFcX !== '')
       ? ((c.condicionDiasFcX === 0 ? 'Contado' : c.condicionDiasFcX + 'd') + ' / ' + ((c.modoVencimientoFcX || c.modoVencimiento) === 'remito' ? 'rem' : 'fc'))
       : '<span class="small-label">(=FC A)</span>';
+    // Contacto: nombre + email (migración del campo viejo si aplica)
+    const ctcNombre = c.contactoNombre || (c.contacto && !c.contacto.includes('@') ? c.contacto : '') || '';
+    const ctcEmail = c.contactoEmail || (c.contacto && c.contacto.includes('@') ? c.contacto : '') || '';
+    let ctcHtml = '';
+    if (ctcNombre) ctcHtml += `<div style="font-size:12px">${ctcNombre}</div>`;
+    if (ctcEmail) ctcHtml += `<div class="small-label">${ctcEmail}</div>`;
+    if (!ctcHtml) ctcHtml = '<span class="small-label">–</span>';
     return `<tr onclick="openClienteModal('${c.id}')" style="cursor:pointer">
       <td>${c.codigo || '–'}</td><td>${c.razonSocial}</td><td>${c.cuit || '–'}</td>
       <td>${c.vendedor}</td>
+      <td>${ctcHtml}</td>
       <td><span class="small-label">${condA}</span></td>
       <td>${condX}</td>
       <td class="num"${saldo > 0 ? ' style="font-weight:600"' : ''}>${fmtMoney(saldo)}</td>
@@ -716,7 +740,11 @@ function saveCliente() {
     modoVencimiento: document.getElementById('cliModo').value,
     condicionDiasFcX: fcXDias === '' ? null : Number(fcXDias),
     modoVencimientoFcX: fcXModo || null,
-    contacto: document.getElementById('cliContacto').value.trim(),
+    contactoNombre: document.getElementById('cliContactoNombre').value.trim(),
+    contactoEmail: document.getElementById('cliContactoEmail').value.trim(),
+    contactoTelefono: document.getElementById('cliContactoTelefono').value.trim(),
+    contactoCargo: document.getElementById('cliContactoCargo').value.trim(),
+    contacto: '', // Campo viejo, lo limpiamos porque la info ahora va en los campos nuevos
     obs: document.getElementById('cliObs').value.trim()
   };
   if (!data.razonSocial) { alert('Falta razón social'); return; }
@@ -1200,7 +1228,7 @@ async function parsePdf(file) {
   }
   // Detección de PDF escaneado (sin texto extraíble)
   if (fullText.trim().length < 30) {
-    throw new Error('PDF escaneado/imagen — cargar manualmente o aplicar OCR primero');
+    throw new Error('PDF escaneado o sin texto extraíble. Cargá este comprobante manualmente desde "Comprobantes → + Nuevo".');
   }
   return extractFacturaFields(fullText);
 }
@@ -1221,32 +1249,46 @@ function extractFacturaFields(text) {
     const tipoM = text.match(/FACT(?:URA)?(?:\s+ELECT(?:R[OÓ]NICA)?)?\s+([ABCEM])\b/i);
     if (tipoM) out.tipo = 'FC_' + tipoM[1].toUpperCase();
   }
+  // FC X: remitos / movimientos internos (Excel guardado como PDF)
+  // Buscar palabras clave típicas de remitos internos
+  if (!out.tipo) {
+    if (/movimiento\s+interno|documento\s+no\s+v[aá]lido\s+como\s+factura|remito\s+interno/i.test(text)) {
+      out.tipo = 'FC_X';
+    }
+  }
+  // Si después de todo no detecta, asumir FC_A (puede corregirlo manualmente)
   if (!out.tipo) out.tipo = 'FC_A';
 
   // ---- PTO VENTA - NÚMERO ----
-  // Formato 0004-00018325. Evitar que matchee CUITs (2 dígitos al inicio).
+  // Formato 0004-00018325 (facturas AFIP). Evitar que matchee CUITs.
   const nroM = text.match(/(?:N[°º]?\s*:?\s*)?(\d{4,5})\s*[-–]\s*(\d{7,8})\b/);
   if (nroM) {
     out.ptoVenta = nroM[1].padStart(4,'0');
     out.numero = nroM[2].padStart(8,'0');
+  } else if (out.tipo === 'FC_X') {
+    // En remitos internos puede haber solo un número (sin punto de venta).
+    // Buscar un número de 4-6 dígitos cerca de la fecha o "Nº", "Número"
+    const remNroM = text.match(/(?:N[°ºo]\s*[:\.]?\s*|n[uú]mero\s*[:\.]?\s*)(\d{4,8})/i)
+                 || text.match(/^\s*(\d{5,8})\s*$/m)  // número solo en una línea
+                 || text.match(/\b(\d{5,6})\b/);       // último recurso: cualquier número de 5-6 dígitos
+    if (remNroM) {
+      out.ptoVenta = '';
+      out.numero = remNroM[1];
+    }
   }
 
   // ---- FECHA EMISIÓN ----
-  // Acepta dd/mm/yy o dd/mm/yyyy
+  // Acepta dd/mm/yy, dd.mm.yy o dd/mm/yyyy
   let fechaM = text.match(/Fecha\s*(?:de\s+)?(?:Emisi[oó]n)?\s*:\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/i);
   if (fechaM) out.fecha = toIsoDate(fechaM[1]);
   else {
-    // Fallback: primera fecha que encuentre con dd/mm/yy o dd/mm/yyyy
-    const anyDate = text.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/);
+    const anyDate = text.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/);
     if (anyDate) out.fecha = toIsoDate(anyDate[1]);
   }
 
   // ---- CUIT CLIENTE ----
-  // Los CUITs tienen formato XX-XXXXXXXX-X. Excluye teléfonos (formato distinto).
   const cuits = [...text.matchAll(/\b(\d{2})[-\s]?(\d{8})[-\s]?(\d)\b/g)].map(m => `${m[1]}-${m[2]}-${m[3]}`);
-  // El primer CUIT suele ser el emisor (Winflex 30-61048777-3). El segundo, el cliente.
   if (cuits.length >= 2) {
-    // Filtrar el CUIT de Winflex si aparece (por las dudas)
     const clienteCuits = cuits.filter(c => !c.startsWith('30-61048777'));
     out.cuit = clienteCuits.length > 0 ? clienteCuits[0] : cuits[1];
   } else if (cuits.length === 1 && !cuits[0].startsWith('30-61048777')) {
@@ -1254,22 +1296,31 @@ function extractFacturaFields(text) {
   }
 
   // ---- CÓDIGO INTERNO DE CLIENTE (Tango) ----
-  // En las FC de Winflex aparece como "Cliente: 2023" cerca del CUIT
   const cliCodM = text.match(/Cliente\s*:?\s*(\d{2,5})\b/i);
   if (cliCodM) out.codigoCliente = cliCodM[1];
 
+  // ---- NOMBRE DE CLIENTE (útil para FC X sin CUIT) ----
+  // Buscar después de "Sr(s)", "Señor(es)", "Cliente:", o como destinatario
+  const cliNombreM = text.match(/(?:Sr\.?\(s\)|Sr\.?\(es\)|Se[ñn]ores|Cliente|Destinatario)\s*:?\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ0-9\s&\.\-]{3,60}?)(?:\s+(?:Direcci[oó]n|CUIT|Tel|Email|Provincia|IVA|Fecha)|$|\n)/);
+  if (cliNombreM) out.nombreCliente = cliNombreM[1].trim();
+
   // ---- IMPORTE TOTAL ----
-  // CLAVE: usar \b para que NO matchee SUBTOTAL
-  // Primero intenta "Importe Total" (factura tipo C/B), después "TOTAL" solo (factura A)
   let totM = text.match(/Importe\s+Total\s*[:\s]*\$?\s*([\d.,]+)/i);
-  if (!totM) {
-    // \bTOTAL\b evita matchear "SUBTOTAL"
-    totM = text.match(/\bTOTAL\b\s*\$?\s*([\d.,]+)/i);
+  if (!totM) totM = text.match(/\bTOTAL\b\s*\$?\s*([\d.,]+)/i);
+  // Para FC X: buscar "$" + número grande al final del documento
+  if (!totM && out.tipo === 'FC_X') {
+    // Buscar todos los números con formato monetario y tomar el mayor
+    const moneyMatches = [...text.matchAll(/\$\s*([\d.,]+)/g)];
+    if (moneyMatches.length > 0) {
+      const valores = moneyMatches.map(m => parseArMoney(m[1])).filter(v => v > 0);
+      if (valores.length > 0) {
+        out.importe = Math.max(...valores);
+      }
+    }
   }
-  if (totM) out.importe = parseArMoney(totM[1]);
+  if (totM && !out.importe) out.importe = parseArMoney(totM[1]);
 
   // ---- FORMA DE PAGO ----
-  // Si dice "contado", marcamos override 0 días
   const formaPagoM = text.match(/Forma\s+de\s+Pago\s*:?\s*([A-Za-zÁÉÍÓÚáéíóú\s]+?)(?:\s|$|\n|Precio)/i);
   if (formaPagoM) {
     const fp = formaPagoM[1].trim();
@@ -1385,6 +1436,19 @@ function guessCliente(p) {
   // 2) Por código interno (Tango)
   if (p.codigoCliente) {
     const c = state.clientes.find(x => x.codigo === p.codigoCliente);
+    if (c) return c.id;
+  }
+  // 3) Por nombre/razón social (matching parcial para FC X sin CUIT)
+  if (p.nombreCliente) {
+    const nombreNorm = p.nombreCliente.toLowerCase().replace(/[.,]/g, '').trim();
+    const c = state.clientes.find(x => {
+      const razNorm = (x.razonSocial || '').toLowerCase().replace(/[.,]/g, '').trim();
+      // Match exacto o uno contiene al otro (al menos 6 caracteres en común)
+      if (razNorm === nombreNorm) return true;
+      if (nombreNorm.length >= 6 && razNorm.includes(nombreNorm)) return true;
+      if (razNorm.length >= 6 && nombreNorm.includes(razNorm)) return true;
+      return false;
+    });
     if (c) return c.id;
   }
   return '';
