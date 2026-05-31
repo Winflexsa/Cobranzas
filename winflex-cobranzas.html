@@ -10,16 +10,16 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root{
-    --bg:#0e1116; --bg2:#12161d; --surface:#171c25; --surface2:#1d2330;
-    --border:#2a3140; --border2:#353d4f;
-    --text:#e9ecf1; --muted:#9aa3b2; --faint:#69707e;
-    --accent:#e0b84c;
-    --pend:#9aa3b2; --prox:#f0b429; --venc:#f05252; --cobr:#2dca72; --parc:#48b0f7;
-    --shadow:0 8px 30px rgba(0,0,0,.45); --r:14px;
+    --bg:#f4f6f9; --bg2:#eef1f5; --surface:#ffffff; --surface2:#f5f7fa;
+    --border:#e3e7ee; --border2:#cdd4df;
+    --text:#1b2233; --muted:#5c6677; --faint:#909aab;
+    --accent:#c8941a;
+    --pend:#8a93a3; --prox:#c97f00; --venc:#d83a3a; --cobr:#1f9d57; --parc:#2b8fd6;
+    --shadow:0 6px 22px rgba(20,30,50,.10); --r:14px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-    background:radial-gradient(1200px 600px at 80% -10%, #1a2030 0%, var(--bg) 55%) fixed;color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+    background:radial-gradient(1100px 560px at 85% -12%, #ffffff 0%, var(--bg) 60%) fixed;color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
   .num{font-variant-numeric:tabular-nums}
   button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
   input,select,textarea{font-family:inherit;font-size:14px}
@@ -28,8 +28,8 @@
 
   #login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:100}
   .login-card{width:340px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:36px 30px;box-shadow:var(--shadow);text-align:center}
-  .logo{width:64px;height:64px;border-radius:16px;margin:0 auto 18px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1d2330,#12161d);border:1px solid var(--border2);position:relative}
-  .logo b{font-size:30px;font-weight:800}
+  .logo{width:64px;height:64px;border-radius:16px;margin:0 auto 18px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#27324a,#1b2233);position:relative}
+  .logo b{font-size:30px;font-weight:800;color:#fff}
   .logo .badge{position:absolute;bottom:-6px;right:-6px;width:26px;height:26px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#1a1408;font-weight:800;font-size:15px;border:2px solid var(--surface)}
   .login-card h1{font-size:18px;font-weight:700}
   .login-card p{color:var(--muted);font-size:12.5px;margin:4px 0 22px}
@@ -41,7 +41,7 @@
 
   #app{display:none;max-width:1240px;margin:0 auto;padding:0 18px 60px}
   header{display:flex;align-items:center;gap:14px;padding:18px 2px 16px;position:sticky;top:0;background:linear-gradient(var(--bg),var(--bg) 70%,transparent);z-index:30}
-  .hlogo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#1d2330,#12161d);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;position:relative}
+  .hlogo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#27324a,#1b2233);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;position:relative}
   .hlogo .dot{position:absolute;bottom:-4px;right:-4px;width:16px;height:16px;border-radius:5px;background:var(--accent);color:#1a1408;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg)}
   header h1{font-size:16px;font-weight:700}
   header .sub{color:var(--faint);font-size:11.5px}
@@ -443,7 +443,7 @@ function fillVendSelects(){const o=VENDEDORES.map(v=>`<option>${v}</option>`).jo
 /* ---------- PERSISTENCIA ---------- */
 function loadLocal(){try{const d=JSON.parse(localStorage.getItem(LS.data));if(d&&d.clientes)STATE=normalizeState(d)}catch(e){}}
 function saveLocal(){localStorage.setItem(LS.data,JSON.stringify(STATE))}
-function normalizeState(d){d.clientes=d.clientes||[];d.comprobantes=d.comprobantes||d.facturas||[];d.meta=d.meta||{version:1};return d}
+function normalizeState(d){d.clientes=(d.clientes||[]).map(mapClienteIn);d.comprobantes=(d.comprobantes||d.facturas||[]).map(mapFacturaIn);d.meta=d.meta||{version:1};return d}
 function setCloud(s,t){$('cloudStatus').className='cloud '+(s==='ok'?'ok':s==='busy'?'busy':s==='bad'?'bad':'');$('cloudText').textContent=t}
 function binURL(){return 'https://api.jsonbin.io/v3/b/'+localStorage.getItem(LS.bin)}
 function binHeaders(){return {'Content-Type':'application/json','X-Master-Key':localStorage.getItem(LS.key),'X-Bin-Meta':'false'}}
