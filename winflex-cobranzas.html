@@ -143,6 +143,41 @@
   .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
   .toast.bad{border-color:var(--venc)}.toast.ok{border-color:var(--cobr)}
 
+  /* cockpit */
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+  .chip{padding:9px 14px;border-radius:11px;background:var(--surface);border:1px solid var(--border);color:var(--muted);font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px;cursor:pointer}
+  .chip:hover{border-color:var(--border2);color:var(--text)}
+  .chip.active{color:var(--text);border-color:var(--accent);background:var(--surface2)}
+  .chip .n{font-size:11px;padding:1px 7px;border-radius:20px;background:var(--bg2);color:var(--muted)}
+  .chip.c-venc.active{border-color:var(--venc)}.chip.c-venc .n{color:var(--venc)}
+  .chip.c-prox.active{border-color:var(--prox)}.chip.c-prox .n{color:var(--prox)}
+
+  .clicard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin-bottom:12px;overflow:hidden}
+  .clicard.urg{border-left:3px solid var(--venc)}
+  .clicard.soon{border-left:3px solid var(--prox)}
+  .clihead{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer}
+  .clihead:hover{background:var(--surface2)}
+  .clihead .nm{font-weight:700;font-size:15px}
+  .clihead .vd{font-size:11.5px;color:var(--faint)}
+  .clihead .tot{margin-left:auto;text-align:right}
+  .clihead .tot .s{font-size:16px;font-weight:800}
+  .clihead .tot .c{font-size:11px;color:var(--faint)}
+  .dias{display:inline-flex;align-items:center;padding:3px 9px;border-radius:8px;font-size:11.5px;font-weight:700;white-space:nowrap}
+  .dias.v{background:rgba(240,82,82,.15);color:var(--venc)}
+  .dias.p{background:rgba(240,180,41,.15);color:var(--prox)}
+  .dias.f{background:rgba(154,163,178,.12);color:var(--muted)}
+  .clibody{border-top:1px solid var(--border);padding:4px 16px 14px}
+  .fline{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap}
+  .fline:last-child{border-bottom:none}
+  .fline .ds{flex:1;min-width:120px}
+  .fline .am{font-weight:700;font-variant-numeric:tabular-nums}
+  .cliacts{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);background:var(--bg2);flex-wrap:wrap}
+  .wa{background:#1f7a44;color:#fff;border-radius:9px;padding:8px 14px;font-weight:700;font-size:12.5px;display:inline-flex;align-items:center;gap:6px}
+  .wa:hover{filter:brightness(1.1)}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg button{padding:9px 12px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);font-size:12.5px;font-weight:600;flex:1}
+  .seg button.on{border-color:var(--accent);color:var(--text);background:var(--surface2)}
+
   @media(max-width:760px){
     .kpis{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}
     header h1{font-size:14px}.who{display:none}
@@ -176,21 +211,27 @@
   </header>
 
   <nav>
-    <button class="active" data-tab="resumen" onclick="switchTab('resumen')">Resumen</button>
+    <button class="active" data-tab="resumen" onclick="switchTab('resumen')">Cobranza</button>
     <button data-tab="facturas" onclick="switchTab('facturas')">Facturas</button>
     <button data-tab="clientes" onclick="switchTab('clientes')">Clientes</button>
     <button data-tab="importar" onclick="switchTab('importar')">Importar</button>
     <button data-tab="config" onclick="switchTab('config')">Config</button>
   </nav>
 
-  <!-- RESUMEN -->
+  <!-- COBRANZA (cockpit) -->
   <section class="tab active" id="tab-resumen">
     <div class="kpis" id="kpis"></div>
-    <div class="grid2">
+    <div class="chips" id="cockChips"></div>
+    <div class="toolbar" style="margin-bottom:14px">
+      <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+        <input id="cockSearch" placeholder="Buscar cliente…" oninput="renderCockpit()"></div>
+      <select class="filter" id="cockVend" onchange="renderCockpit()"></select>
+    </div>
+    <div id="cockList"></div>
+    <div class="grid2" style="margin-top:8px">
       <div class="card"><h3>Saldo por vendedor</h3><div id="porVendedor"></div></div>
       <div class="card"><h3>Top deudores</h3><div id="topDeudores"></div></div>
     </div>
-    <div class="card" style="margin-top:18px"><h3>Vencidas y próximas a vencer</h3><div id="proxVenc"></div></div>
   </section>
 
   <!-- FACTURAS -->
@@ -313,9 +354,18 @@
   <header><h2>Registrar cobro</h2><button class="x" onclick="closeOverlay('ovCobro')">×</button></header>
   <div class="body">
     <div id="cobroInfo" class="hint" style="margin-bottom:14px"></div>
-    <div class="field"><label>Monto cobrado ahora</label><input id="cobroMonto" type="number" step="0.01"></div>
-    <div class="field"><label>Fecha de cobro</label><input id="cobroFecha" type="date"></div>
-    <button class="btn ghost sm" onclick="cobrarTotal()">Cobrar el saldo total</button>
+    <div class="frow">
+      <div class="field"><label>Monto</label><input id="cobroMonto" type="number" step="0.01" oninput="cobroTipoHint()"></div>
+      <div class="field"><label>Fecha</label><input id="cobroFecha" type="date"></div>
+    </div>
+    <div class="frow">
+      <div class="field"><label>Forma de pago</label><select id="cobroForma"><option>Efectivo</option><option>Transferencia</option><option>Cheque</option><option>e-Cheq</option></select></div>
+      <div class="field"><label>Remito</label><input id="cobroRemito" placeholder="opcional"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:2px">
+      <button class="btn ghost sm" onclick="cobrarTotal()">Cobrar saldo total</button>
+      <span class="hint" id="cobroTipo" style="margin:0"></span>
+    </div>
   </div>
   <div class="foot"><button class="btn ghost" onclick="closeOverlay('ovCobro')">Cancelar</button><button class="btn" onclick="saveCobro()">Registrar</button></div>
 </div></div>
@@ -388,7 +438,7 @@ function startApp(){
   if(localStorage.getItem(LS.bin)) loadFromCloud(true); else {renderAll();setCloud('local','Local')}
   setInterval(()=>{if(localStorage.getItem(LS.bin)&&!saving)loadFromCloud(false)},60000);
 }
-function fillVendSelects(){const o=VENDEDORES.map(v=>`<option>${v}</option>`).join('');$('f_vend').innerHTML=o;$('facVend').innerHTML='<option value="">Todos los vendedores</option>'+o;$('cliVend').innerHTML='<option value="">Todos los vendedores</option>'+o}
+function fillVendSelects(){const o=VENDEDORES.map(v=>`<option>${v}</option>`).join('');$('f_vend').innerHTML=o;$('facVend').innerHTML='<option value="">Todos los vendedores</option>'+o;$('cliVend').innerHTML='<option value="">Todos los vendedores</option>'+o;$('cockVend').innerHTML='<option value="">Todos</option>'+o}
 
 /* ---------- PERSISTENCIA ---------- */
 function loadLocal(){try{const d=JSON.parse(localStorage.getItem(LS.data));if(d&&d.clientes)STATE=normalizeState(d)}catch(e){}}
@@ -450,10 +500,70 @@ function renderResumen(){
   const byCli={};STATE.comprobantes.forEach(f=>{const s=saldoDe(f);if(s>0.5)byCli[f.clienteId]=(byCli[f.clienteId]||0)+s});
   $('topDeudores').innerHTML=Object.entries(byCli).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([cid,s])=>{const c=getCliente(cid);return `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="font-weight:500">${esc(c?c.razonSocial:'?')}</span><span class="num" style="font-weight:700">${fmtM(s)}</span></div>`}).join('')||'<div class="empty">Sin deudores</div>';
-  const lim=addDays(todayISO(),30);
-  const pend=STATE.comprobantes.filter(f=>saldoDe(f)>0.5).map(f=>({f,v:vencimientoDe(f),e:estadoDe(f)})).filter(o=>o.v<=lim).sort((a,b)=>a.v.localeCompare(b.v)).slice(0,14);
-  $('proxVenc').innerHTML=pend.length?`<table><tbody>${pend.map(o=>{const c=getCliente(o.f.clienteId),m=EM[o.e]||EM.pendiente;return `<tr><td class="num">${dShow(o.v)}</td><td class="cli-name">${esc(c?c.razonSocial:'?')}</td><td>${tipoLabel(o.f.tipo)} ${esc(o.f.numero||'')}</td><td class="r num">${fmt(saldoDe(o.f))}</td><td><span class="badge ${m.c}">${m.l}</span></td></tr>`}).join('')}</tbody></table>`:'<div class="empty">Nada vence en los próximos 30 días</div>';
+  renderCockpit();
 }
+
+/* ---------- COCKPIT (vencimientos + reclamo) ---------- */
+let cockFilter='venc'; // venc | sem | m30 | all
+function diasDe(f){return Math.floor((new Date(vencimientoDe(f)+'T00:00:00')-new Date(todayISO()+'T00:00:00'))/864e5)}
+function diasBadge(d){if(d<0)return `<span class="dias v">${-d}d vencida</span>`;if(d===0)return `<span class="dias v">vence hoy</span>`;if(d<=7)return `<span class="dias p">vence en ${d}d</span>`;return `<span class="dias f">vence en ${d}d</span>`}
+function setCock(f){cockFilter=f;renderCockpit()}
+function renderCockpit(){
+  // facturas con saldo
+  const con=STATE.comprobantes.filter(f=>saldoDe(f)>0.5).map(f=>({f,d:diasDe(f)}));
+  const nVenc=con.filter(o=>o.d<0).length, nSem=con.filter(o=>o.d>=0&&o.d<=7).length, nM30=con.filter(o=>o.d>=0&&o.d<=30).length;
+  $('cockChips').innerHTML=`
+    <div class="chip c-venc ${cockFilter==='venc'?'active':''}" onclick="setCock('venc')">Vencidas <span class="n">${nVenc}</span></div>
+    <div class="chip c-prox ${cockFilter==='sem'?'active':''}" onclick="setCock('sem')">Vence esta semana <span class="n">${nSem}</span></div>
+    <div class="chip ${cockFilter==='m30'?'active':''}" onclick="setCock('m30')">Próx. 30 días <span class="n">${nM30}</span></div>
+    <div class="chip ${cockFilter==='all'?'active':''}" onclick="setCock('all')">Todas con saldo <span class="n">${con.length}</span></div>`;
+  // filtro
+  const q=($('cockSearch').value||'').toLowerCase(), fv=$('cockVend').value;
+  let list=con.filter(o=>{
+    if(cockFilter==='venc'&&o.d>=0)return false;
+    if(cockFilter==='sem'&&!(o.d>=0&&o.d<=7))return false;
+    if(cockFilter==='m30'&&!(o.d>=0&&o.d<=30))return false;
+    const c=getCliente(o.f.clienteId);
+    if(fv&&(!c||c.vendedor!==fv))return false;
+    if(q&&!((c?c.razonSocial:'').toLowerCase().includes(q)))return false;
+    return true;
+  });
+  // agrupar por cliente
+  const grp={};
+  list.forEach(o=>{const k=o.f.clienteId||'_';(grp[k]=grp[k]||[]).push(o)});
+  const cards=Object.entries(grp).map(([cid,arr])=>{
+    arr.sort((a,b)=>a.d-b.d);
+    const cli=getCliente(cid)||{razonSocial:'⚠ sin cliente'};
+    const tot=arr.reduce((s,o)=>s+saldoDe(o.f),0), worst=arr[0].d;
+    return {cli,cid,arr,tot,worst};
+  }).sort((a,b)=>a.worst-b.worst);
+  if(!cards.length){$('cockList').innerHTML='<div class="card empty">Nada para mostrar en este filtro 👌</div>';return}
+  $('cockList').innerHTML=cards.map(({cli,cid,arr,tot,worst})=>{
+    const cls=worst<0?'urg':worst<=7?'soon':'';
+    const ct=(cli.contactos&&cli.contactos[0])||{};
+    const wa=waLink(ct.telefono);
+    const msg=buildReclamo(cli,arr);
+    const waBtn=wa?`<a class="wa" href="${wa}?text=${encodeURIComponent(msg)}" target="_blank">💬 Reclamar por WhatsApp</a>`:`<button class="btn ghost sm" onclick="copyReclamo('${cid}')">Copiar texto de reclamo</button>`;
+    return `<div class="clicard ${cls}">
+      <div class="clihead" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+        <div><div class="nm">${esc(cli.razonSocial)}</div><div class="vd">${esc(cli.vendedor||'')}${ct.nombre?' · '+esc(ct.nombre):''}${arr.length>1?' · '+arr.length+' comprob.':''}</div></div>
+        <div class="tot"><div class="s">${fmt(tot)}</div><div class="c">${diasBadge(worst)}</div></div>
+      </div>
+      <div class="clibody" style="display:${worst<0||cards.length<=4?'block':'none'}">
+        ${arr.map(o=>`<div class="fline"><span class="ds">${tipoLabel(o.f.tipo)} ${esc((o.f.ptoVenta?o.f.ptoVenta+'-':'')+(o.f.numero||''))} · ${dShow(vencimientoDe(o.f))}</span>${diasBadge(o.d)}<span class="am">${fmt(saldoDe(o.f))}</span><button class="mini go" onclick="event.stopPropagation();openCobro('${o.f.id}')">Cobrar</button></div>`).join('')}
+      </div>
+      <div class="cliacts">${waBtn}${ct.telefono?`<a class="btn ghost sm" href="tel:${esc(ct.telefono)}">📞 Llamar</a>`:''}</div>
+    </div>`;
+  }).join('');
+}
+function buildReclamo(cli,arr){
+  const ct=(cli.contactos&&cli.contactos[0])||{};
+  const hola=ct.nombre?`Hola ${ct.nombre.split(' ')[0]}`:'Hola';
+  const items=arr.map(o=>{const d=o.d;const est=d<0?`vencida hace ${-d} días`:d===0?'vence hoy':`vence en ${d} días`;return `• ${tipoLabel(o.f.tipo)} ${(o.f.ptoVenta?o.f.ptoVenta+'-':'')+(o.f.numero||'')} (${dShow(vencimientoDe(o.f))}) por ${fmt(saldoDe(o.f))} — ${est}`}).join('\n');
+  const tot=arr.reduce((s,o)=>s+saldoDe(o.f),0);
+  return `${hola}, ¿cómo estás? Te escribo de Winflex S.A. por estos comprobantes pendientes:\n${items}\nTotal: ${fmt(tot)}.\n¿Cómo coordinamos el pago? ¡Gracias!`;
+}
+function copyReclamo(cid){const cli=getCliente(cid);if(!cli)return;const arr=STATE.comprobantes.filter(f=>f.clienteId===cid&&saldoDe(f)>0.5).map(f=>({f,d:diasDe(f)})).sort((a,b)=>a.d-b.d);navigator.clipboard.writeText(buildReclamo(cli,arr)).then(()=>toast('Texto de reclamo copiado','ok'))}
 
 /* ---------- FACTURAS ---------- */
 function renderFacturas(){
@@ -499,9 +609,10 @@ function saveFactura(){
   closeOverlay('ovFactura');saveToCloud();renderFacturas();renderResumen();toast('Factura guardada','ok');
 }
 function deleteFactura(id){const fid=id||(editingFac&&editingFac.id);if(!fid)return;if(!confirm('¿Eliminar esta factura?'))return;STATE.comprobantes=STATE.comprobantes.filter(f=>f.id!==fid);closeOverlay('ovFactura');saveToCloud();renderFacturas();renderResumen();toast('Factura eliminada')}
-function openCobro(id){cobroTarget=STATE.comprobantes.find(f=>f.id===id);if(!cobroTarget)return;const c=getCliente(cobroTarget.clienteId),s=saldoDe(cobroTarget);$('cobroInfo').innerHTML=`<b>${esc(c?c.razonSocial:'')}</b> · ${tipoLabel(cobroTarget.tipo)} ${esc(cobroTarget.numero||'')}<br>Importe ${fmt(cobroTarget.importe)} · Saldo <b style="color:var(--text)">${fmt(s)}</b>`;$('cobroMonto').value=s.toFixed(2);$('cobroFecha').value=todayISO();openOverlay('ovCobro')}
-function cobrarTotal(){if(cobroTarget)$('cobroMonto').value=saldoDe(cobroTarget).toFixed(2)}
-function saveCobro(){if(!cobroTarget)return;const m=+$('cobroMonto').value||0;const imprev=+cobroTarget.importe||0;const cob=(imprev-saldoDe(cobroTarget))+m;cobroTarget.cobrado=cob;cobroTarget.saldo=Math.max(0,imprev-cob);cobroTarget.pagos=cobroTarget.pagos||[];cobroTarget.pagos.push({fecha:$('cobroFecha').value||todayISO(),monto:m});if(cobroTarget.saldo<=0.5)cobroTarget.fechaCobro=$('cobroFecha').value||todayISO();cobroTarget.updatedAt=NOW();closeOverlay('ovCobro');saveToCloud();renderFacturas();renderResumen();toast('Cobro registrado','ok')}
+function openCobro(id){cobroTarget=STATE.comprobantes.find(f=>f.id===id);if(!cobroTarget)return;const c=getCliente(cobroTarget.clienteId),s=saldoDe(cobroTarget);$('cobroInfo').innerHTML=`<b>${esc(c?c.razonSocial:'')}</b> · ${tipoLabel(cobroTarget.tipo)} ${esc((cobroTarget.ptoVenta?cobroTarget.ptoVenta+'-':'')+(cobroTarget.numero||''))}<br>Importe ${fmt(cobroTarget.importe)} · Saldo <b style="color:var(--text)">${fmt(s)}</b>`;$('cobroMonto').value=s.toFixed(2);$('cobroFecha').value=todayISO();$('cobroForma').value='Transferencia';$('cobroRemito').value='';cobroTipoHint();openOverlay('ovCobro')}
+function cobrarTotal(){if(cobroTarget){$('cobroMonto').value=saldoDe(cobroTarget).toFixed(2);cobroTipoHint()}}
+function cobroTipoHint(){if(!cobroTarget)return;const s=saldoDe(cobroTarget),m=+$('cobroMonto').value||0;const el=$('cobroTipo');if(m<=0){el.textContent='';return}if(m>=s-0.5){el.textContent='✓ Cobro total';el.style.color='var(--cobr)'}else{el.textContent=`Parcial · queda ${fmt(s-m)}`;el.style.color='var(--parc)'}}
+function saveCobro(){if(!cobroTarget)return;const m=+$('cobroMonto').value||0;if(m<=0){toast('Poné un monto','bad');return}const imprev=+cobroTarget.importe||0;const cob=(imprev-saldoDe(cobroTarget))+m;cobroTarget.cobrado=cob;cobroTarget.saldo=Math.max(0,imprev-cob);cobroTarget.pagos=cobroTarget.pagos||[];cobroTarget.pagos.push({fecha:$('cobroFecha').value||todayISO(),monto:m,forma:$('cobroForma').value,remito:$('cobroRemito').value.trim()});if(cobroTarget.saldo<=0.5)cobroTarget.fechaCobro=$('cobroFecha').value||todayISO();cobroTarget.updatedAt=NOW();closeOverlay('ovCobro');saveToCloud();renderFacturas();renderResumen();toast('Cobro registrado','ok')}
 
 /* ---------- CLIENTES ---------- */
 function saldoCliente(id){return STATE.comprobantes.filter(f=>f.clienteId===id).reduce((s,f)=>s+saldoDe(f),0)}
