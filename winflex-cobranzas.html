@@ -354,17 +354,14 @@
   <header><h2>Registrar cobro</h2><button class="x" onclick="closeOverlay('ovCobro')">×</button></header>
   <div class="body">
     <div id="cobroInfo" class="hint" style="margin-bottom:14px"></div>
-    <div class="frow">
-      <div class="field"><label>Monto</label><input id="cobroMonto" type="number" step="0.01" oninput="cobroTipoHint()"></div>
-      <div class="field"><label>Fecha</label><input id="cobroFecha" type="date"></div>
+    <div class="field" style="max-width:200px"><label>Fecha de cobro</label><input id="cobroFecha" type="date"></div>
+    <div class="field"><label>Formas de pago</label>
+      <div id="cobroFormas"></div>
+      <button class="add-contact" onclick="addCobroLine()">+ Agregar forma</button>
     </div>
-    <div class="frow">
-      <div class="field"><label>Forma de pago</label><select id="cobroForma"><option>Efectivo</option><option>Transferencia</option><option>Cheque</option><option>e-Cheq</option></select></div>
-      <div class="field"><label>Remito</label><input id="cobroRemito" placeholder="opcional"></div>
-    </div>
-    <div style="display:flex;align-items:center;gap:10px;margin-top:2px">
-      <button class="btn ghost sm" onclick="cobrarTotal()">Cobrar saldo total</button>
-      <span class="hint" id="cobroTipo" style="margin:0"></span>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px;padding-top:12px;border-top:1px solid var(--border)">
+      <button class="btn ghost sm" onclick="cobrarTotal()">Igualar al saldo</button>
+      <span class="hint" id="cobroTipo" style="margin:0;font-size:13px;font-weight:600"></span>
     </div>
   </div>
   <div class="foot"><button class="btn ghost" onclick="closeOverlay('ovCobro')">Cancelar</button><button class="btn" onclick="saveCobro()">Registrar</button></div>
@@ -543,7 +540,7 @@ function renderCockpit(){
     const ct=(cli.contactos&&cli.contactos[0])||{};
     const wa=waLink(ct.telefono);
     const msg=buildReclamo(cli,arr);
-    const waBtn=wa?`<a class="wa" href="${wa}?text=${encodeURIComponent(msg)}" target="_blank">💬 Reclamar por WhatsApp</a>`:`<button class="btn ghost sm" onclick="copyReclamo('${cid}')">Copiar texto de reclamo</button>`;
+    const waBtn=wa?`<a class="wa" href="${wa}?text=${encodeURIComponent(msg)}" target="_blank">💬 Reclamar por WhatsApp</a>`:`<span class="hint" style="margin:0">Cargá un teléfono al cliente para reclamar por WhatsApp</span>`;
     return `<div class="clicard ${cls}">
       <div class="clihead" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
         <div><div class="nm">${esc(cli.razonSocial)}</div><div class="vd">${esc(cli.vendedor||'')}${ct.nombre?' · '+esc(ct.nombre):''}${arr.length>1?' · '+arr.length+' comprob.':''}</div></div>
@@ -563,7 +560,6 @@ function buildReclamo(cli,arr){
   const tot=arr.reduce((s,o)=>s+saldoDe(o.f),0);
   return `${hola}, ¿cómo estás? Te escribo de Winflex S.A. por estos comprobantes pendientes:\n${items}\nTotal: ${fmt(tot)}.\n¿Cómo coordinamos el pago? ¡Gracias!`;
 }
-function copyReclamo(cid){const cli=getCliente(cid);if(!cli)return;const arr=STATE.comprobantes.filter(f=>f.clienteId===cid&&saldoDe(f)>0.5).map(f=>({f,d:diasDe(f)})).sort((a,b)=>a.d-b.d);navigator.clipboard.writeText(buildReclamo(cli,arr)).then(()=>toast('Texto de reclamo copiado','ok'))}
 
 /* ---------- FACTURAS ---------- */
 function renderFacturas(){
@@ -609,10 +605,18 @@ function saveFactura(){
   closeOverlay('ovFactura');saveToCloud();renderFacturas();renderResumen();toast('Factura guardada','ok');
 }
 function deleteFactura(id){const fid=id||(editingFac&&editingFac.id);if(!fid)return;if(!confirm('¿Eliminar esta factura?'))return;STATE.comprobantes=STATE.comprobantes.filter(f=>f.id!==fid);closeOverlay('ovFactura');saveToCloud();renderFacturas();renderResumen();toast('Factura eliminada')}
-function openCobro(id){cobroTarget=STATE.comprobantes.find(f=>f.id===id);if(!cobroTarget)return;const c=getCliente(cobroTarget.clienteId),s=saldoDe(cobroTarget);$('cobroInfo').innerHTML=`<b>${esc(c?c.razonSocial:'')}</b> · ${tipoLabel(cobroTarget.tipo)} ${esc((cobroTarget.ptoVenta?cobroTarget.ptoVenta+'-':'')+(cobroTarget.numero||''))}<br>Importe ${fmt(cobroTarget.importe)} · Saldo <b style="color:var(--text)">${fmt(s)}</b>`;$('cobroMonto').value=s.toFixed(2);$('cobroFecha').value=todayISO();$('cobroForma').value='Transferencia';$('cobroRemito').value='';cobroTipoHint();openOverlay('ovCobro')}
-function cobrarTotal(){if(cobroTarget){$('cobroMonto').value=saldoDe(cobroTarget).toFixed(2);cobroTipoHint()}}
-function cobroTipoHint(){if(!cobroTarget)return;const s=saldoDe(cobroTarget),m=+$('cobroMonto').value||0;const el=$('cobroTipo');if(m<=0){el.textContent='';return}if(m>=s-0.5){el.textContent='✓ Cobro total';el.style.color='var(--cobr)'}else{el.textContent=`Parcial · queda ${fmt(s-m)}`;el.style.color='var(--parc)'}}
-function saveCobro(){if(!cobroTarget)return;const m=+$('cobroMonto').value||0;if(m<=0){toast('Poné un monto','bad');return}const imprev=+cobroTarget.importe||0;const cob=(imprev-saldoDe(cobroTarget))+m;cobroTarget.cobrado=cob;cobroTarget.saldo=Math.max(0,imprev-cob);cobroTarget.pagos=cobroTarget.pagos||[];cobroTarget.pagos.push({fecha:$('cobroFecha').value||todayISO(),monto:m,forma:$('cobroForma').value,remito:$('cobroRemito').value.trim()});if(cobroTarget.saldo<=0.5)cobroTarget.fechaCobro=$('cobroFecha').value||todayISO();cobroTarget.updatedAt=NOW();closeOverlay('ovCobro');saveToCloud();renderFacturas();renderResumen();toast('Cobro registrado','ok')}
+const FORMAS=['Efectivo','Transferencia','Cheque','e-Cheq'];
+function openCobro(id){cobroTarget=STATE.comprobantes.find(f=>f.id===id);if(!cobroTarget)return;const c=getCliente(cobroTarget.clienteId),s=saldoDe(cobroTarget);$('cobroInfo').innerHTML=`<b>${esc(c?c.razonSocial:'')}</b> · ${tipoLabel(cobroTarget.tipo)} ${esc((cobroTarget.ptoVenta?cobroTarget.ptoVenta+'-':'')+(cobroTarget.numero||''))}<br>Importe ${fmt(cobroTarget.importe)} · Saldo <b style="color:var(--text)">${fmt(s)}</b>`;$('cobroFecha').value=todayISO();$('cobroFormas').innerHTML='';addCobroLine({forma:'Transferencia',monto:s});recalcCobro();openOverlay('ovCobro')}
+function addCobroLine(d){d=d&&d.forma!==undefined?d:{};const div=document.createElement('div');div.className='contact-row';
+  div.innerHTML=`<select onchange="recalcCobro()" style="flex:1;padding:9px 10px;border-radius:9px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:13px">${FORMAS.map(f=>`<option ${f===d.forma?'selected':''}>${f}</option>`).join('')}</select>
+  <input type="number" step="0.01" placeholder="Monto" value="${d.monto!=null?(+d.monto).toFixed(2):''}" oninput="recalcCobro()" style="flex:1">
+  <input placeholder="Remito/ref" value="${esc(d.remito||'')}" style="flex:1">
+  <button onclick="this.parentNode.remove();recalcCobro()">×</button>`;
+  $('cobroFormas').appendChild(div);}
+function cobroLines(){return [...$('cobroFormas').querySelectorAll('.contact-row')].map(r=>{const[sel,mon,rem]=r.querySelectorAll('select,input');return{forma:sel.value,monto:+mon.value||0,remito:rem.value.trim()}})}
+function recalcCobro(){if(!cobroTarget)return;const s=saldoDe(cobroTarget),tot=cobroLines().reduce((a,l)=>a+l.monto,0),el=$('cobroTipo');if(tot<=0){el.textContent='';return}if(tot>=s-0.5){el.textContent=`✓ Cobro total · ${fmt(tot)}`;el.style.color='var(--cobr)'}else{el.textContent=`Parcial ${fmt(tot)} · queda ${fmt(s-tot)}`;el.style.color='var(--parc)'}}
+function cobrarTotal(){if(!cobroTarget)return;$('cobroFormas').innerHTML='';addCobroLine({forma:'Transferencia',monto:saldoDe(cobroTarget)});recalcCobro()}
+function saveCobro(){if(!cobroTarget)return;const lines=cobroLines().filter(l=>l.monto>0);const m=lines.reduce((a,l)=>a+l.monto,0);if(m<=0){toast('Poné al menos un monto','bad');return}const imp=+cobroTarget.importe||0;const cob=(imp-saldoDe(cobroTarget))+m;cobroTarget.cobrado=cob;cobroTarget.saldo=Math.max(0,imp-cob);cobroTarget.pagos=cobroTarget.pagos||[];cobroTarget.pagos.push({fecha:$('cobroFecha').value||todayISO(),monto:m,formas:lines});if(cobroTarget.saldo<=0.5)cobroTarget.fechaCobro=$('cobroFecha').value||todayISO();cobroTarget.updatedAt=NOW();closeOverlay('ovCobro');saveToCloud();renderFacturas();renderResumen();toast('Cobro registrado','ok')}
 
 /* ---------- CLIENTES ---------- */
 function saldoCliente(id){return STATE.comprobantes.filter(f=>f.clienteId===id).reduce((s,f)=>s+saldoDe(f),0)}
@@ -758,7 +762,7 @@ function renderStats(){const cs=STATE.comprobantes.filter(f=>saldoDe(f)>0.5).len
 
 function openOverlay(id){$(id).classList.add('open')}
 function closeOverlay(id){$(id).classList.remove('open')}
-document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open')}));
+/* los modales se cierran solo con la X o Cancelar, para no perder lo cargado al tocar afuera */
 
 (function init(){const u=localStorage.getItem(LS.user);if(u&&Object.values(PINS).includes(u)){CURRENT_USER=u;startApp()}else $('pinInput').focus()})();
 </script>
