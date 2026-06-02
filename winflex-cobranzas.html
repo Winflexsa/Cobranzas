@@ -131,6 +131,8 @@
   .contact-row input{flex:1;padding:9px 10px;border-radius:9px;background:var(--bg2);border:1px solid var(--border);color:var(--text);outline:none;font-size:13px}
   .contact-row button{color:var(--venc);padding:6px 8px;border-radius:8px;border:1px solid var(--border)}
   .add-contact{font-size:12.5px;color:var(--accent);font-weight:600;margin-top:4px}
+  .chk{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:11.5px;color:var(--muted);font-weight:400;cursor:pointer}
+  .chk input{width:auto}
   .hint{font-size:11.5px;color:var(--faint);margin-top:5px;line-height:1.5}
 
   .cfg-sec{margin-bottom:22px}
@@ -167,11 +169,18 @@
   .dias.p{background:rgba(240,180,41,.15);color:var(--prox)}
   .dias.f{background:rgba(154,163,178,.12);color:var(--muted)}
   .clibody{border-top:1px solid var(--border);padding:4px 16px 14px}
-  .fline{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;flex-wrap:wrap}
+  .fline{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);flex-wrap:wrap}
   .fline:last-child{border-bottom:none}
-  .fline .ds{flex:1;min-width:120px}
-  .fline .am{font-weight:700;font-variant-numeric:tabular-nums}
-  .fline .ds .fdates{display:block;font-size:11px;color:var(--faint);margin-top:2px;font-weight:400}
+  .fl-main{display:flex;flex-direction:column;gap:7px;min-width:170px;flex:1}
+  .fl-nro{font-weight:700;font-size:14px}
+  .fl-dates{display:flex;gap:8px;flex-wrap:wrap}
+  .fl-d{display:flex;flex-direction:column;background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:4px 10px;min-width:78px}
+  .fl-d .lab{font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint);font-weight:700}
+  .fl-d .val{font-size:13.5px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums}
+  .fl-d.v{border-color:rgba(240,82,82,.35);background:rgba(240,82,82,.07)}
+  .fl-d.v .lab,.fl-d.v .val{color:var(--venc)}
+  .fl-side{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .fline .am{font-weight:800;font-variant-numeric:tabular-nums;font-size:14.5px}
   .segline{padding:11px 16px;font-size:12.5px;color:var(--muted);background:var(--surface2);border-top:1px solid var(--border);line-height:1.55}
   .seghist{max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;padding:4px 12px;background:var(--bg2)}
   .seghist .segh{padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
@@ -314,6 +323,11 @@
         <div class="hint">Podés usar el mismo Bin de tu app vieja para ver los mismos datos, o uno nuevo para arrancar limpio.</div>
       </div>
       <div class="cfg-sec"><h3>Datos</h3><div class="hint" id="cfgStats"></div></div>
+      <div class="cfg-sec">
+        <h3>Mantenimiento</h3>
+        <div class="hint" style="margin-bottom:10px">Recalcula el vencimiento de todas las facturas usando la condición de días de cada cliente. Útil si una factura quedó con un vencimiento "congelado" que no respeta los días del cliente (ej: toma contado en vez de los días reales). No toca las facturas con vencimiento marcado como manual.</div>
+        <button class="btn ghost sm" onclick="recalcVencimientos()">↻ Recalcular vencimientos según cliente</button>
+      </div>
     </div>
   </section>
 </div>
@@ -340,12 +354,12 @@
   <header><h2 id="facTitle">Nueva factura</h2><button class="x" onclick="closeOverlay('ovFactura')">×</button></header>
   <div class="body">
     <div class="field"><label>Cliente *</label><input id="ff_cliInput" list="cliList" placeholder="Escribí para buscar…" oninput="onFacClienteInput()"><datalist id="cliList"></datalist></div>
-    <div class="frow"><div class="field"><label>Tipo</label><select id="ff_tipo">
+    <div class="frow"><div class="field"><label>Tipo</label><select id="ff_tipo" onchange="refreshVencForm()">
       <option value="FC_A">FC A</option><option value="FC_B">FC B</option><option value="FC_C">FC C</option>
       <option value="NC_A">NC A</option><option value="NC_B">NC B</option><option value="FC_X">Remito / FC X</option></select></div>
       <div class="field"><label>Pto vta - Número</label><input id="ff_numero" placeholder="0004-00012345"></div></div>
-    <div class="frow"><div class="field"><label>Fecha *</label><input id="ff_fecha" type="date"></div><div class="field"><label>Importe *</label><input id="ff_importe" type="number" step="0.01" placeholder="0,00"></div></div>
-    <div class="frow"><div class="field"><label>Cobrado</label><input id="ff_cobrado" type="number" step="0.01" value="0"></div><div class="field"><label>Vencimiento</label><input id="ff_venc" type="date"><div class="hint">Se calcula solo; podés pisarlo.</div></div></div>
+    <div class="frow"><div class="field"><label>Fecha *</label><input id="ff_fecha" type="date" onchange="refreshVencForm()"></div><div class="field"><label>Importe *</label><input id="ff_importe" type="number" step="0.01" placeholder="0,00"></div></div>
+    <div class="frow"><div class="field"><label>Cobrado</label><input id="ff_cobrado" type="number" step="0.01" value="0"></div><div class="field"><label>Vencimiento</label><input id="ff_venc" type="date" disabled><label class="chk"><input type="checkbox" id="ff_vencManual" onchange="onVencManualToggle()"> Manual (si no, usa la condición del cliente)</label></div></div>
     <div class="field"><label>Observaciones</label><textarea id="ff_obs"></textarea></div>
   </div>
   <div class="foot">
@@ -378,8 +392,8 @@
   <header><h2>Seguimiento de cobranza</h2><button class="x" onclick="closeOverlay('ovSeguimiento')">×</button></header>
   <div class="body">
     <div id="segInfo" class="hint" style="margin-bottom:14px"></div>
-    <div class="field"><label>Nota / situación actual</label><textarea id="segNota" rows="3" placeholder="Ej: Prometieron pago para el viernes. Hablar con Diego de administración."></textarea></div>
-    <div class="field" style="max-width:220px"><label>Próximo contacto (recordatorio)</label><input id="segProx" type="date"></div>
+    <div class="field"><label>Observación / aclaración</label><textarea id="segNota" rows="3" placeholder="Ej: Prometieron pago para el viernes. Hablar con Diego de administración."></textarea></div>
+    <div class="field" style="max-width:220px"><label>Fecha de la observación</label><input id="segFecha" type="date"></div>
     <div id="segHist"></div>
   </div>
   <div class="foot"><button class="btn ghost" onclick="closeOverlay('ovSeguimiento')">Cancelar</button><button class="btn" onclick="saveSeguimiento()">Guardar</button></div>
@@ -562,27 +576,21 @@ function renderCockpit(){
         <div class="tot"><div class="s">${fmt(tot)}</div><div class="c">${diasBadge(worst)}</div></div>
       </div>
       <div class="clibody" style="display:${worst<0||cards.length<=4?'block':'none'}">
-        ${arr.map(o=>`<div class="fline"><span class="ds"><b>${tipoLabel(o.f.tipo)} ${esc((o.f.ptoVenta?o.f.ptoVenta+'-':'')+(o.f.numero||''))}</b><span class="fdates">Emisión ${dShow(o.f.fecha)} · Vence ${dShow(vencimientoDe(o.f))}</span></span>${diasBadge(o.d)}<span class="am">${fmt(saldoDe(o.f))}</span><button class="mini go" onclick="event.stopPropagation();openCobro('${o.f.id}')">Cobrar</button></div>`).join('')}
+        ${arr.map(o=>`<div class="fline"><div class="fl-main"><div class="fl-nro">${tipoLabel(o.f.tipo)} ${esc((o.f.ptoVenta?o.f.ptoVenta+'-':'')+(o.f.numero||''))}</div><div class="fl-dates"><span class="fl-d"><span class="lab">Emisión</span><span class="val">${dShow(o.f.fecha)}</span></span><span class="fl-d v"><span class="lab">Vencimiento</span><span class="val">${dShow(vencimientoDe(o.f))}</span></span></div></div><div class="fl-side">${diasBadge(o.d)}<span class="am">${fmt(saldoDe(o.f))}</span><button class="mini go" onclick="event.stopPropagation();openCobro('${o.f.id}')">Cobrar</button></div></div>`).join('')}
       </div>
       ${segLine(cli)}
       <div class="cliacts">
-        <button class="btn ghost sm" onclick="event.stopPropagation();openSeguimiento('${cid}')">📝 ${cli.seguimiento&&cli.seguimiento.nota?'Editar seguimiento':'Agregar seguimiento'}</button>
+        <button class="btn ghost sm" onclick="event.stopPropagation();openSeguimiento('${cid}')">📝 ${cli.seguimiento&&cli.seguimiento.historial&&cli.seguimiento.historial.length?'Ver / agregar seguimiento':'Agregar seguimiento'}</button>
         ${ct.telefono?`<a class="btn ghost sm" href="tel:${esc(ct.telefono)}">📞 Llamar</a>`:''}
       </div>
     </div>`;
   }).join('');
 }
 function segLine(cli){
-  const seg=cli.seguimiento||{};
-  if(!seg.nota&&!seg.proxContacto)return '';
-  let px='';
-  if(seg.proxContacto){
-    const dd=Math.floor((new Date(seg.proxContacto+'T00:00:00')-new Date(todayISO()+'T00:00:00'))/864e5);
-    const c=dd<=0?'v':dd<=2?'p':'f';
-    const lab=dd<0?`contactar — atrasado ${-dd}d`:dd===0?'contactar hoy':`contactar el ${dShow(seg.proxContacto)}`;
-    px=`<span class="dias ${c}" style="margin-left:8px">↻ ${lab}</span>`;
-  }
-  return `<div class="segline">📝 ${esc(seg.nota||'(sin nota)')}${px}</div>`;
+  const h=(cli.seguimiento&&cli.seguimiento.historial)||[];
+  if(!h.length)return '';
+  const last=h[h.length-1];
+  return `<div class="segline">📝 <b>${dShow(last.f)}</b>${last.user?' · '+esc(last.user):''}: ${esc(last.texto)}${h.length>1?` <span style="color:var(--faint)">(+${h.length-1} anteriores)</span>`:''}</div>`;
 }
 function buildReclamo(cli,arr){
   const ct=(cli.contactos&&cli.contactos[0])||{};
@@ -597,22 +605,21 @@ function openSeguimiento(cid){
   seguimientoTarget=getCliente(cid);if(!seguimientoTarget)return;
   const seg=seguimientoTarget.seguimiento||{};
   $('segInfo').innerHTML=`<b>${esc(seguimientoTarget.razonSocial)}</b> · saldo ${fmt(saldoCliente(cid))}`;
-  $('segNota').value=seg.nota||'';
-  $('segProx').value=seg.proxContacto||'';
+  $('segNota').value='';
+  $('segFecha').value=todayISO();
   const hist=seg.historial||[];
   $('segHist').innerHTML=hist.length?`<div class="field" style="margin-bottom:0"><label>Historial</label><div class="seghist">${hist.slice().reverse().map(h=>`<div class="segh"><div class="segh-f">${dShow(h.f)}${h.user?' · '+esc(h.user):''}</div><div>${esc(h.texto)}</div></div>`).join('')}</div></div>`:'';
   openOverlay('ovSeguimiento');
 }
 function saveSeguimiento(){
   if(!seguimientoTarget)return;
-  const nota=$('segNota').value.trim(),prox=$('segProx').value||'';
+  const texto=$('segNota').value.trim(),f=$('segFecha').value||todayISO();
+  if(!texto){toast('Escribí una observación','bad');return}
   const seg=seguimientoTarget.seguimiento||{historial:[]};
   seg.historial=seg.historial||[];
-  const last=seg.historial[seg.historial.length-1];
-  if(nota&&(!last||last.texto!==nota))seg.historial.push({f:todayISO(),texto:nota,user:CURRENT_USER});
-  seg.nota=nota;seg.proxContacto=prox;
+  seg.historial.push({f,texto,user:CURRENT_USER});
   seguimientoTarget.seguimiento=seg;seguimientoTarget.updatedAt=NOW();
-  closeOverlay('ovSeguimiento');saveToCloud();renderCockpit();renderClientes();toast('Seguimiento guardado','ok');
+  closeOverlay('ovSeguimiento');saveToCloud();renderCockpit();renderClientes();toast('Observación guardada','ok');
 }
 
 /* ---------- FACTURAS ---------- */
@@ -643,18 +650,31 @@ function renderCliList(){$('cliList').innerHTML=STATE.clientes.map(c=>`<option v
 function openFactura(id){
   editingFac=id?STATE.comprobantes.find(f=>f.id===id):null;
   $('facTitle').textContent=editingFac?'Editar factura':'Nueva factura';$('facDelBtn').style.display=editingFac?'block':'none';renderCliList();
-  if(editingFac){const c=getCliente(editingFac.clienteId);$('ff_cliInput').value=c?c.razonSocial:'';$('ff_tipo').value=editingFac.tipo||'FC_A';$('ff_numero').value=(editingFac.ptoVenta?editingFac.ptoVenta+'-':'')+(editingFac.numero||'');$('ff_fecha').value=(editingFac.fecha||'').slice(0,10);$('ff_importe').value=editingFac.importe||'';$('ff_cobrado').value=(+editingFac.importe||0)-saldoDe(editingFac);$('ff_venc').value=vencimientoDe(editingFac);$('ff_obs').value=editingFac.obs||''}
-  else{$('ff_cliInput').value='';$('ff_tipo').value='FC_A';$('ff_numero').value='';$('ff_fecha').value=todayISO();$('ff_importe').value='';$('ff_cobrado').value=0;$('ff_venc').value='';$('ff_obs').value=''}
+  if(editingFac){const c=getCliente(editingFac.clienteId);$('ff_cliInput').value=c?c.razonSocial:'';$('ff_tipo').value=editingFac.tipo||'FC_A';$('ff_numero').value=(editingFac.ptoVenta?editingFac.ptoVenta+'-':'')+(editingFac.numero||'');$('ff_fecha').value=(editingFac.fecha||'').slice(0,10);$('ff_importe').value=editingFac.importe||'';$('ff_cobrado').value=(+editingFac.importe||0)-saldoDe(editingFac);$('ff_obs').value=editingFac.obs||'';
+    const auto=vencimientoDe({...editingFac,fechaVencimiento:''});
+    const esManual=!!(editingFac.fechaVencimiento&&editingFac.fechaVencimiento.slice(0,10)!==auto);
+    $('ff_vencManual').checked=esManual;$('ff_venc').value=esManual?editingFac.fechaVencimiento.slice(0,10):auto;$('ff_venc').disabled=!esManual;
+  }
+  else{$('ff_cliInput').value='';$('ff_tipo').value='FC_A';$('ff_numero').value='';$('ff_fecha').value=todayISO();$('ff_importe').value='';$('ff_cobrado').value=0;$('ff_obs').value='';$('ff_vencManual').checked=false;$('ff_venc').disabled=true;refreshVencForm()}
   openOverlay('ovFactura');
 }
-function onFacClienteInput(){const n=$('ff_cliInput').value.trim();const c=STATE.clientes.find(x=>x.razonSocial.toLowerCase()===n.toLowerCase());if(c&&$('ff_fecha').value&&!$('ff_venc').value){$('ff_venc').value=addDays($('ff_fecha').value,c.condicionDias||30)}}
+function calcVencForm(){
+  const n=$('ff_cliInput').value.trim();const cli=STATE.clientes.find(x=>x.razonSocial.toLowerCase()===n.toLowerCase());
+  const fechaIso=$('ff_fecha').value||todayISO();
+  if(!cli)return addDays(fechaIso,30);
+  return vencimientoDe({clienteId:cli.id,tipo:$('ff_tipo').value,fecha:fechaIso});
+}
+function refreshVencForm(){if(!$('ff_vencManual').checked)$('ff_venc').value=calcVencForm()}
+function onVencManualToggle(){const m=$('ff_vencManual').checked;$('ff_venc').disabled=!m;if(!m)refreshVencForm()}
+function onFacClienteInput(){refreshVencForm()}
 function splitNro(s){s=(s||'').trim();const m=s.match(/^(\d{1,5})\s*[-–]\s*(\d{1,8})$/);if(m)return{pto:m[1],num:m[2]};return{pto:'',num:s}}
 function saveFactura(){
   const n=$('ff_cliInput').value.trim();const cli=STATE.clientes.find(x=>x.razonSocial.toLowerCase()===n.toLowerCase());
   if(!cli){toast('Cliente no encontrado. Creálo primero.','bad');return}
   const imp=+$('ff_importe').value;if(!imp){toast('Falta el importe','bad');return}
   const sp=splitNro($('ff_numero').value);const cobrado=+$('ff_cobrado').value||0;
-  const obj={clienteId:cli.id,tipo:$('ff_tipo').value,ptoVenta:sp.pto,numero:sp.num,fecha:$('ff_fecha').value||todayISO(),importe:imp,saldo:Math.max(0,imp-cobrado),cobrado:cobrado,fechaVencimiento:$('ff_venc').value||'',obs:$('ff_obs').value.trim(),updatedAt:NOW()};
+  const esManual=$('ff_vencManual').checked;
+  const obj={clienteId:cli.id,tipo:$('ff_tipo').value,ptoVenta:sp.pto,numero:sp.num,fecha:$('ff_fecha').value||todayISO(),importe:imp,saldo:Math.max(0,imp-cobrado),cobrado:cobrado,fechaVencimiento:esManual?($('ff_venc').value||''):'',vencManual:esManual,obs:$('ff_obs').value.trim(),updatedAt:NOW()};
   if(editingFac)Object.assign(editingFac,obj);else STATE.comprobantes.push({id:uid(),pagos:[],createdAt:NOW(),...obj});
   closeOverlay('ovFactura');saveToCloud();renderFacturas();renderResumen();toast('Factura guardada','ok');
 }
@@ -783,7 +803,7 @@ function mapClienteIn(c){
 function mapFacturaIn(f){
   const imp=+f.importe||0;let cobrado;
   if(f.cobrado!=null)cobrado=+f.cobrado;else if(f.saldo!=null)cobrado=Math.max(0,imp-(+f.saldo||0));else cobrado=0;
-  return {id:f.id||uid(),clienteId:f.clienteId||'',tipo:f.tipo||'FC_A',ptoVenta:f.ptoVenta||'',numero:f.numero||'',fecha:(f.fecha||todayISO()).slice(0,10),fechaRemito:f.fechaRemito||null,importe:imp,cobrado,saldo:Math.max(0,imp-cobrado),condicionOverride:f.condicionOverride!=null?f.condicionOverride:null,modoOverride:f.modoOverride||null,pagos:f.pagos||[],fechaVencimiento:(f.fechaVencimiento||'').slice(0,10),obs:f.obs||'',origenImport:f.origenImport||{tipo:'import'},createdAt:f.createdAt||NOW(),updatedAt:NOW()};
+  return {id:f.id||uid(),clienteId:f.clienteId||'',tipo:f.tipo||'FC_A',ptoVenta:f.ptoVenta||'',numero:f.numero||'',fecha:(f.fecha||todayISO()).slice(0,10),fechaRemito:f.fechaRemito||null,importe:imp,cobrado,saldo:Math.max(0,imp-cobrado),condicionOverride:f.condicionOverride!=null?f.condicionOverride:null,modoOverride:f.modoOverride||null,pagos:f.pagos||[],fechaVencimiento:(f.fechaVencimiento||'').slice(0,10),vencManual:!!f.vencManual,obs:f.obs||'',origenImport:f.origenImport||{tipo:'import'},createdAt:f.createdAt||NOW(),updatedAt:NOW()};
 }
 function importJSON(ev,kind){
   const file=ev.target.files[0];if(!file)return;const rd=new FileReader();
@@ -810,6 +830,13 @@ function importJSON(ev,kind){
     saveToCloud();renderAll();
   }catch(e){toast('JSON inválido: '+e.message,'bad')}ev.target.value='';};
   rd.readAsText(file);
+}
+function recalcVencimientos(){
+  const afect=STATE.comprobantes.filter(f=>!f.vencManual&&f.fechaVencimiento);
+  if(!afect.length){toast('No hay vencimientos congelados para recalcular','');return}
+  if(!confirm(`Se van a recalcular ${afect.length} factura(s) usando la condición de días de cada cliente.\nLas marcadas como "manual" no se tocan.\n\n¿Continuar?`))return;
+  afect.forEach(f=>{f.fechaVencimiento='';f.updatedAt=NOW()});
+  saveToCloud();renderAll();toast(afect.length+' vencimiento(s) recalculado(s) según cliente','ok');
 }
 function exportBackup(){const blob=new Blob([JSON.stringify(STATE,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='winflex-cobranzas-'+todayISO()+'.json';a.click()}
 function renderStats(){const cs=STATE.comprobantes.filter(f=>saldoDe(f)>0.5).length;$('cfgStats').innerHTML=`${STATE.clientes.length} clientes · ${STATE.comprobantes.length} facturas (${cs} con saldo)<br>Última actualización: ${STATE.meta&&STATE.meta.lastUpdate?dShow(STATE.meta.lastUpdate)+' por '+(STATE.meta.lastUser||'?'):'—'}`}
