@@ -161,6 +161,7 @@
   .clihead:hover{background:var(--surface2)}
   .clihead .nm{font-weight:700;font-size:15px}
   .clihead .vd{font-size:11.5px;color:var(--faint)}
+  .cond-pill{display:inline-block;background:var(--surface2);border:1px solid var(--border2);border-radius:7px;padding:1px 8px;font-size:11px;font-weight:700;color:var(--accent);margin-left:4px;vertical-align:middle}
   .clihead .tot{margin-left:auto;text-align:right}
   .clihead .tot .s{font-size:16px;font-weight:800}
   .clihead .tot .c{font-size:11px;color:var(--faint)}
@@ -570,9 +571,12 @@ function renderCockpit(){
   $('cockList').innerHTML=cards.map(({cli,cid,arr,tot,worst})=>{
     const cls=worst<0?'urg':worst<=7?'soon':'';
     const ct=(cli.contactos&&cli.contactos[0])||{};
+    const cond=cli.condicionDias!=null?+cli.condicionDias:30;
+    const condFcX=cli.condicionDiasFcX!=null?+cli.condicionDiasFcX:null;
+    const condTxt=`${cond} días`+(condFcX!=null&&condFcX!==cond?` · Remito ${condFcX}d`:'');
     return `<div class="clicard ${cls}">
       <div class="clihead" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
-        <div><div class="nm">${esc(cli.razonSocial)}</div><div class="vd">${esc(cli.vendedor||'')}${ct.nombre?' · '+esc(ct.nombre):''}${arr.length>1?' · '+arr.length+' comprob.':''}</div></div>
+        <div><div class="nm">${esc(cli.razonSocial)}</div><div class="vd">${esc(cli.vendedor||'')}${ct.nombre?' · '+esc(ct.nombre):''}${arr.length>1?' · '+arr.length+' comprob.':''} <span class="cond-pill">⏱ ${condTxt}</span></div></div>
         <div class="tot"><div class="s">${fmt(tot)}</div><div class="c">${diasBadge(worst)}</div></div>
       </div>
       <div class="clibody" style="display:${worst<0||cards.length<=4?'block':'none'}">
