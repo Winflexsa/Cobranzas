@@ -325,7 +325,7 @@
       <div class="cfg-sec"><h3>Datos</h3><div class="hint" id="cfgStats"></div></div>
       <div class="cfg-sec">
         <h3>Mantenimiento</h3>
-        <div class="hint" style="margin-bottom:10px">Recalcula el vencimiento de todas las facturas usando la condición de días de cada cliente. Útil si una factura quedó con un vencimiento "congelado" que no respeta los días del cliente (ej: toma contado en vez de los días reales). No toca las facturas con vencimiento marcado como manual.</div>
+        <div class="hint" style="margin-bottom:10px">El vencimiento ya se calcula siempre con la condición de días de cada cliente (salvo los marcados como "manual"). Este botón es opcional: borra de la base los vencimientos viejos "congelados" que quedaron al importar, para dejar los datos prolijos. No cambia lo que ves en pantalla.</div>
         <button class="btn ghost sm" onclick="recalcVencimientos()">↻ Recalcular vencimientos según cliente</button>
       </div>
     </div>
@@ -435,7 +435,7 @@ function condicionEfectiva(f){
   return {dias:(cli.condicionDias!=null?+cli.condicionDias:30), modo:cli.modoVencimiento||'factura'};
 }
 function vencimientoDe(f){
-  if(f.fechaVencimiento) return f.fechaVencimiento.slice(0,10);
+  if(f.vencManual && f.fechaVencimiento) return f.fechaVencimiento.slice(0,10);
   const {dias,modo}=condicionEfectiva(f);
   const base=(modo==='remito'&&f.fechaRemito)?f.fechaRemito:(f.fecha||todayISO());
   return addDays(base,dias);
@@ -651,9 +651,9 @@ function openFactura(id){
   editingFac=id?STATE.comprobantes.find(f=>f.id===id):null;
   $('facTitle').textContent=editingFac?'Editar factura':'Nueva factura';$('facDelBtn').style.display=editingFac?'block':'none';renderCliList();
   if(editingFac){const c=getCliente(editingFac.clienteId);$('ff_cliInput').value=c?c.razonSocial:'';$('ff_tipo').value=editingFac.tipo||'FC_A';$('ff_numero').value=(editingFac.ptoVenta?editingFac.ptoVenta+'-':'')+(editingFac.numero||'');$('ff_fecha').value=(editingFac.fecha||'').slice(0,10);$('ff_importe').value=editingFac.importe||'';$('ff_cobrado').value=(+editingFac.importe||0)-saldoDe(editingFac);$('ff_obs').value=editingFac.obs||'';
-    const auto=vencimientoDe({...editingFac,fechaVencimiento:''});
-    const esManual=!!(editingFac.fechaVencimiento&&editingFac.fechaVencimiento.slice(0,10)!==auto);
-    $('ff_vencManual').checked=esManual;$('ff_venc').value=esManual?editingFac.fechaVencimiento.slice(0,10):auto;$('ff_venc').disabled=!esManual;
+    const esManual=!!editingFac.vencManual;
+    const auto=vencimientoDe({...editingFac,vencManual:false,fechaVencimiento:''});
+    $('ff_vencManual').checked=esManual;$('ff_venc').value=esManual?(editingFac.fechaVencimiento||'').slice(0,10):auto;$('ff_venc').disabled=!esManual;
   }
   else{$('ff_cliInput').value='';$('ff_tipo').value='FC_A';$('ff_numero').value='';$('ff_fecha').value=todayISO();$('ff_importe').value='';$('ff_cobrado').value=0;$('ff_obs').value='';$('ff_vencManual').checked=false;$('ff_venc').disabled=true;refreshVencForm()}
   openOverlay('ovFactura');
