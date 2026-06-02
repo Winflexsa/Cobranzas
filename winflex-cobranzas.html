@@ -171,6 +171,12 @@
   .fline:last-child{border-bottom:none}
   .fline .ds{flex:1;min-width:120px}
   .fline .am{font-weight:700;font-variant-numeric:tabular-nums}
+  .fline .ds .fdates{display:block;font-size:11px;color:var(--faint);margin-top:2px;font-weight:400}
+  .segline{padding:11px 16px;font-size:12.5px;color:var(--muted);background:var(--surface2);border-top:1px solid var(--border);line-height:1.55}
+  .seghist{max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;padding:4px 12px;background:var(--bg2)}
+  .seghist .segh{padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+  .seghist .segh:last-child{border-bottom:none}
+  .seghist .segh-f{font-size:11px;color:var(--faint);font-weight:600}
   .cliacts{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);background:var(--bg2);flex-wrap:wrap}
   .wa{background:#1f7a44;color:#fff;border-radius:9px;padding:8px 14px;font-weight:700;font-size:12.5px;display:inline-flex;align-items:center;gap:6px}
   .wa:hover{filter:brightness(1.1)}
@@ -367,6 +373,18 @@
   <div class="foot"><button class="btn ghost" onclick="closeOverlay('ovCobro')">Cancelar</button><button class="btn" onclick="saveCobro()">Registrar</button></div>
 </div></div>
 
+<!-- MODAL SEGUIMIENTO -->
+<div class="overlay" id="ovSeguimiento"><div class="modal" style="max-width:460px">
+  <header><h2>Seguimiento de cobranza</h2><button class="x" onclick="closeOverlay('ovSeguimiento')">×</button></header>
+  <div class="body">
+    <div id="segInfo" class="hint" style="margin-bottom:14px"></div>
+    <div class="field"><label>Nota / situación actual</label><textarea id="segNota" rows="3" placeholder="Ej: Prometieron pago para el viernes. Hablar con Diego de administración."></textarea></div>
+    <div class="field" style="max-width:220px"><label>Próximo contacto (recordatorio)</label><input id="segProx" type="date"></div>
+    <div id="segHist"></div>
+  </div>
+  <div class="foot"><button class="btn ghost" onclick="closeOverlay('ovSeguimiento')">Cancelar</button><button class="btn" onclick="saveSeguimiento()">Guardar</button></div>
+</div></div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -378,7 +396,7 @@ const CUIT_WINFLEX='30-61048777';
 const LS={bin:'wfc_bin',key:'wfc_key',user:'wfc_user',data:'wfc_data'};
 
 let STATE={clientes:[],comprobantes:[],meta:{version:1}};
-let CURRENT_USER=null, editingCli=null, editingFac=null, cobroTarget=null;
+let CURRENT_USER=null, editingCli=null, editingFac=null, cobroTarget=null, seguimientoTarget=null;
 let saving=false, savePending=false, pdfPending=[];
 
 const $=id=>document.getElementById(id);
@@ -538,20 +556,33 @@ function renderCockpit(){
   $('cockList').innerHTML=cards.map(({cli,cid,arr,tot,worst})=>{
     const cls=worst<0?'urg':worst<=7?'soon':'';
     const ct=(cli.contactos&&cli.contactos[0])||{};
-    const wa=waLink(ct.telefono);
-    const msg=buildReclamo(cli,arr);
-    const waBtn=wa?`<a class="wa" href="${wa}?text=${encodeURIComponent(msg)}" target="_blank">💬 Reclamar por WhatsApp</a>`:`<span class="hint" style="margin:0">Cargá un teléfono al cliente para reclamar por WhatsApp</span>`;
     return `<div class="clicard ${cls}">
       <div class="clihead" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
         <div><div class="nm">${esc(cli.razonSocial)}</div><div class="vd">${esc(cli.vendedor||'')}${ct.nombre?' · '+esc(ct.nombre):''}${arr.length>1?' · '+arr.length+' comprob.':''}</div></div>
         <div class="tot"><div class="s">${fmt(tot)}</div><div class="c">${diasBadge(worst)}</div></div>
       </div>
       <div class="clibody" style="display:${worst<0||cards.length<=4?'block':'none'}">
-        ${arr.map(o=>`<div class="fline"><span class="ds">${tipoLabel(o.f.tipo)} ${esc((o.f.ptoVenta?o.f.ptoVenta+'-':'')+(o.f.numero||''))} · ${dShow(vencimientoDe(o.f))}</span>${diasBadge(o.d)}<span class="am">${fmt(saldoDe(o.f))}</span><button class="mini go" onclick="event.stopPropagation();openCobro('${o.f.id}')">Cobrar</button></div>`).join('')}
+        ${arr.map(o=>`<div class="fline"><span class="ds"><b>${tipoLabel(o.f.tipo)} ${esc((o.f.ptoVenta?o.f.ptoVenta+'-':'')+(o.f.numero||''))}</b><span class="fdates">Emisión ${dShow(o.f.fecha)} · Vence ${dShow(vencimientoDe(o.f))}</span></span>${diasBadge(o.d)}<span class="am">${fmt(saldoDe(o.f))}</span><button class="mini go" onclick="event.stopPropagation();openCobro('${o.f.id}')">Cobrar</button></div>`).join('')}
       </div>
-      <div class="cliacts">${waBtn}${ct.telefono?`<a class="btn ghost sm" href="tel:${esc(ct.telefono)}">📞 Llamar</a>`:''}</div>
+      ${segLine(cli)}
+      <div class="cliacts">
+        <button class="btn ghost sm" onclick="event.stopPropagation();openSeguimiento('${cid}')">📝 ${cli.seguimiento&&cli.seguimiento.nota?'Editar seguimiento':'Agregar seguimiento'}</button>
+        ${ct.telefono?`<a class="btn ghost sm" href="tel:${esc(ct.telefono)}">📞 Llamar</a>`:''}
+      </div>
     </div>`;
   }).join('');
+}
+function segLine(cli){
+  const seg=cli.seguimiento||{};
+  if(!seg.nota&&!seg.proxContacto)return '';
+  let px='';
+  if(seg.proxContacto){
+    const dd=Math.floor((new Date(seg.proxContacto+'T00:00:00')-new Date(todayISO()+'T00:00:00'))/864e5);
+    const c=dd<=0?'v':dd<=2?'p':'f';
+    const lab=dd<0?`contactar — atrasado ${-dd}d`:dd===0?'contactar hoy':`contactar el ${dShow(seg.proxContacto)}`;
+    px=`<span class="dias ${c}" style="margin-left:8px">↻ ${lab}</span>`;
+  }
+  return `<div class="segline">📝 ${esc(seg.nota||'(sin nota)')}${px}</div>`;
 }
 function buildReclamo(cli,arr){
   const ct=(cli.contactos&&cli.contactos[0])||{};
@@ -559,6 +590,29 @@ function buildReclamo(cli,arr){
   const items=arr.map(o=>{const d=o.d;const est=d<0?`vencida hace ${-d} días`:d===0?'vence hoy':`vence en ${d} días`;return `• ${tipoLabel(o.f.tipo)} ${(o.f.ptoVenta?o.f.ptoVenta+'-':'')+(o.f.numero||'')} (${dShow(vencimientoDe(o.f))}) por ${fmt(saldoDe(o.f))} — ${est}`}).join('\n');
   const tot=arr.reduce((s,o)=>s+saldoDe(o.f),0);
   return `${hola}, ¿cómo estás? Te escribo de Winflex S.A. por estos comprobantes pendientes:\n${items}\nTotal: ${fmt(tot)}.\n¿Cómo coordinamos el pago? ¡Gracias!`;
+}
+
+/* ---------- SEGUIMIENTO DE COBRANZA ---------- */
+function openSeguimiento(cid){
+  seguimientoTarget=getCliente(cid);if(!seguimientoTarget)return;
+  const seg=seguimientoTarget.seguimiento||{};
+  $('segInfo').innerHTML=`<b>${esc(seguimientoTarget.razonSocial)}</b> · saldo ${fmt(saldoCliente(cid))}`;
+  $('segNota').value=seg.nota||'';
+  $('segProx').value=seg.proxContacto||'';
+  const hist=seg.historial||[];
+  $('segHist').innerHTML=hist.length?`<div class="field" style="margin-bottom:0"><label>Historial</label><div class="seghist">${hist.slice().reverse().map(h=>`<div class="segh"><div class="segh-f">${dShow(h.f)}${h.user?' · '+esc(h.user):''}</div><div>${esc(h.texto)}</div></div>`).join('')}</div></div>`:'';
+  openOverlay('ovSeguimiento');
+}
+function saveSeguimiento(){
+  if(!seguimientoTarget)return;
+  const nota=$('segNota').value.trim(),prox=$('segProx').value||'';
+  const seg=seguimientoTarget.seguimiento||{historial:[]};
+  seg.historial=seg.historial||[];
+  const last=seg.historial[seg.historial.length-1];
+  if(nota&&(!last||last.texto!==nota))seg.historial.push({f:todayISO(),texto:nota,user:CURRENT_USER});
+  seg.nota=nota;seg.proxContacto=prox;
+  seguimientoTarget.seguimiento=seg;seguimientoTarget.updatedAt=NOW();
+  closeOverlay('ovSeguimiento');saveToCloud();renderCockpit();renderClientes();toast('Seguimiento guardado','ok');
 }
 
 /* ---------- FACTURAS ---------- */
@@ -724,7 +778,7 @@ function confirmPdf(){
 function mapClienteIn(c){
   let contactos=c.contactos;
   if(!contactos||!contactos.length){if(c.contactoNombre||c.contactoTelefono||c.contactoEmail)contactos=[{nombre:c.contactoNombre||'',telefono:c.contactoTelefono||'',email:c.contactoEmail||''}];else contactos=[]}
-  return {id:c.id||uid(),codigo:c.codigo||'',cuit:c.cuit||'',razonSocial:c.razonSocial||'',vendedor:VENDEDORES.includes(c.vendedor)?c.vendedor:'Winflex',condicionDias:c.condicionDias!=null?+c.condicionDias:30,modoVencimiento:c.modoVencimiento||'factura',condicionDiasFcX:c.condicionDiasFcX!=null?+c.condicionDiasFcX:null,modoVencimientoFcX:c.modoVencimientoFcX||null,contactos,obs:c.obs||'',createdAt:c.createdAt||NOW(),updatedAt:NOW()};
+  return {id:c.id||uid(),codigo:c.codigo||'',cuit:c.cuit||'',razonSocial:c.razonSocial||'',vendedor:VENDEDORES.includes(c.vendedor)?c.vendedor:'Winflex',condicionDias:c.condicionDias!=null?+c.condicionDias:30,modoVencimiento:c.modoVencimiento||'factura',condicionDiasFcX:c.condicionDiasFcX!=null?+c.condicionDiasFcX:null,modoVencimientoFcX:c.modoVencimientoFcX||null,contactos,seguimiento:c.seguimiento||null,obs:c.obs||'',createdAt:c.createdAt||NOW(),updatedAt:NOW()};
 }
 function mapFacturaIn(f){
   const imp=+f.importe||0;let cobrado;
