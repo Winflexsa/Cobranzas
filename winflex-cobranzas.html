@@ -354,6 +354,7 @@
     <div class="frow"><div class="field"><label>Razón social *</label><input id="f_razon"></div><div class="field" style="max-width:130px"><label>Código</label><input id="f_codigo"></div></div>
     <div class="frow"><div class="field"><label>CUIT</label><input id="f_cuit"></div><div class="field"><label>Vendedor</label><select id="f_vend"></select></div></div>
     <div class="frow"><div class="field"><label>Plazo (días)</label><input id="f_plazo" type="number" min="0" value="30"><label class="chk"><input type="checkbox" id="f_contado" onchange="onContadoToggle()"> Contado (0 días)</label></div><div class="field"><label>Vence desde</label><select id="f_modo"><option value="factura">Fecha factura</option><option value="remito">Fecha remito</option></select></div></div>
+    <div class="frow"><div class="field"><label>Entregar cheques (días)</label><input id="f_cheque" type="number" min="0" placeholder="vacío = no aplica"><div class="hint" style="margin:4px 0 0">Solo si el cliente exige los cheques antes del vencimiento (ej. Molinos: vence 60, cheques a 30).</div></div><div class="field"></div></div>
     <div class="field"><label>Contactos</label><div id="f_contactos"></div><button class="add-contact" onclick="addContactRow()">+ Agregar contacto</button></div>
     <div class="field"><label>Observaciones</label><textarea id="f_obs"></textarea></div>
   </div>
@@ -369,10 +370,11 @@
   <header><h2 id="facTitle">Nueva factura</h2><button class="x" onclick="closeOverlay('ovFactura')">×</button></header>
   <div class="body">
     <div class="field"><label>Cliente *</label><input id="ff_cliInput" list="cliList" placeholder="Escribí para buscar…" oninput="onFacClienteInput()"><datalist id="cliList"></datalist></div>
-    <div class="frow"><div class="field"><label>Tipo</label><select id="ff_tipo" onchange="refreshVencForm()">
+    <div class="frow"><div class="field"><label>Tipo</label><select id="ff_tipo" onchange="onFacTipoChange()">
       <option value="FC_A">FC A</option><option value="FC_B">FC B</option><option value="FC_C">FC C</option>
-      <option value="NC_A">NC A</option><option value="NC_B">NC B</option><option value="FC_X">Remito / FC X</option></select></div>
+      <option value="NC_A">NC A</option><option value="NC_B">NC B</option><option value="NC_C">NC C</option><option value="FC_X">Remito / FC X</option></select></div>
       <div class="field"><label>Pto vta - Número</label><input id="ff_numero" placeholder="0004-00012345"></div></div>
+    <div class="field" id="ff_asociadaRow" style="display:none"><label>Factura asociada (Nº)</label><input id="ff_asociada" placeholder="ej. 3035 — la NC resta del saldo de esa factura"><div class="hint" style="margin:4px 0 0">Dejala vacía si es un crédito suelto (resta del saldo total del cliente).</div></div>
     <div class="frow"><div class="field"><label>Fecha *</label><input id="ff_fecha" type="date" onchange="refreshVencForm()"></div><div class="field"><label>Importe *</label><input id="ff_importe" type="number" step="0.01" placeholder="0,00"></div></div>
     <div class="frow"><div class="field"><label>Cobrado</label><input id="ff_cobrado" type="number" step="0.01" value="0"></div><div class="field"><label>Vencimiento</label><input id="ff_venc" type="date" disabled><label class="chk"><input type="checkbox" id="ff_vencManual" onchange="onVencManualToggle()"> Manual (si no, usa la condición del cliente)</label></div></div>
     <div class="field"><label>Observaciones</label><textarea id="ff_obs"></textarea></div>
@@ -450,16 +452,50 @@ function condicionEfectiva(f){
   if(f.tipo==='FC_X' && cli.condicionDiasFcX!=null) return {dias:+cli.condicionDiasFcX, modo:cli.modoVencimientoFcX||cli.modoVencimiento||'factura'};
   return {dias:(cli.condicionDias!=null?+cli.condicionDias:30), modo:cli.modoVencimiento||'factura'};
 }
+function baseVtoDe(f){const {modo}=condicionEfectiva(f);return (modo==='remito'&&f.fechaRemito)?f.fechaRemito:(f.fecha||todayISO())}
 function vencimientoDe(f){
   if(f.vencManual && f.fechaVencimiento) return f.fechaVencimiento.slice(0,10);
-  const {dias,modo}=condicionEfectiva(f);
-  const base=(modo==='remito'&&f.fechaRemito)?f.fechaRemito:(f.fecha||todayISO());
-  return addDays(base,dias);
+  const {dias}=condicionEfectiva(f);
+  return addDays(baseVtoDe(f),dias);
+}
+/* ---------- NOTAS DE CRÉDITO ---------- */
+function isNC(f){return (f.tipo||'').startsWith('NC_')}
+function normNum(s){return String(s||'').replace(/\D/g,'').replace(/^0+/,'')}
+// factura a la que apunta una NC (mismo cliente, número asociado)
+function facturaAsociadaDe(nc){
+  if(!isNC(nc)||!nc.asociadaNum)return null;
+  const num=normNum(nc.asociadaNum); if(!num)return null;
+  return STATE.comprobantes.find(x=>!isNC(x)&&x.clienteId===nc.clienteId&&normNum(x.numero)===num)||null;
+}
+// total de NC aplicado a una factura
+function ncAplicadaA(fac){
+  if(!fac||isNC(fac))return 0;
+  const num=normNum(fac.numero); if(!num)return 0;
+  return STATE.comprobantes.filter(x=>isNC(x)&&x.clienteId===fac.clienteId&&normNum(x.asociadaNum)===num)
+    .reduce((s,x)=>s+Math.max(0,(+x.importe||0)-(+x.cobrado||0)),0);
 }
 function saldoDe(f){
-  if(f.saldo!=null && f.cobrado==null) return Math.max(0,+f.saldo||0);
-  return Math.max(0,(+f.importe||0)-(+f.cobrado||0));
+  if(isNC(f)){
+    // NC asociada a una factura existente: su efecto ya está netteado en la factura → no aporta saldo propio
+    if(facturaAsociadaDe(f))return 0;
+    // NC suelta (crédito a favor): saldo negativo, resta del total del cliente
+    return -Math.max(0,(+f.importe||0)-(+f.cobrado||0));
+  }
+  let base;
+  if(f.saldo!=null && f.cobrado==null) base=Math.max(0,+f.saldo||0);
+  else base=Math.max(0,(+f.importe||0)-(+f.cobrado||0));
+  return Math.max(0, base - ncAplicadaA(f));
 }
+/* ---------- ENTREGA DE CHEQUES ---------- */
+function fechaChequeDe(f){
+  if(isNC(f))return '';
+  const cli=getCliente(f.clienteId)||{};
+  if(cli.diasCheque==null||cli.diasCheque==='')return '';
+  if(f.vencManual)return '';
+  return addDays(baseVtoDe(f),+cli.diasCheque||0);
+}
+function diasChequeDe(f){const fc=fechaChequeDe(f);if(!fc)return null;return Math.floor((new Date(fc+'T00:00:00')-new Date(todayISO()+'T00:00:00'))/864e5)}
+function chequeBadge(d){if(d==null)return '';if(d<0)return `<span class="dias v">cheques ${-d}d tarde</span>`;if(d===0)return `<span class="dias v">cheques hoy</span>`;if(d<=7)return `<span class="dias p">cheques en ${d}d</span>`;return `<span class="dias f">cheques en ${d}d</span>`}
 function estadoDe(f){
   const saldo=saldoDe(f);
   if(saldo<=0.5) return 'cobrada';
@@ -528,9 +564,11 @@ function renderAll(){renderResumen();renderFacturas();renderClientes();renderSta
 
 /* ---------- RESUMEN ---------- */
 function renderResumen(){
-  let porCobrar=0,vencido=0,porVencer=0,cobradoTot=0,facturado=0;
-  STATE.comprobantes.forEach(f=>{const imp=+f.importe||0,saldo=saldoDe(f),est=estadoDe(f);facturado+=imp;cobradoTot+=(imp-saldo);
-    if(saldo>0.5){porCobrar+=saldo;if(est==='vencida'||est==='parcial-venc')vencido+=saldo;else porVencer+=saldo}});
+  let porCobrar=0,vencido=0,porVencer=0,cobradoTot=0,facturado=0,creditos=0;
+  STATE.comprobantes.forEach(f=>{const imp=+f.importe||0,saldo=saldoDe(f),est=estadoDe(f);if(!isNC(f)){facturado+=imp;cobradoTot+=(imp-saldo)}
+    if(saldo>0.5){porCobrar+=saldo;if(est==='vencida'||est==='parcial-venc')vencido+=saldo;else porVencer+=saldo}
+    else if(saldo<-0.5){creditos+=-saldo}});
+  porCobrar=Math.max(0,porCobrar-creditos);
   $('kpis').innerHTML=`
     <div class="kpi por"><div class="bar"></div><div class="lab">Por cobrar</div><div class="val num">${fmtM(porCobrar)}</div><div class="meta">${fmtFull(porCobrar)}</div></div>
     <div class="kpi venc"><div class="bar"></div><div class="lab">Vencido</div><div class="val num" style="color:var(--venc)">${fmtM(vencido)}</div><div class="meta">${porCobrar?Math.round(vencido/porCobrar*100):0}% del saldo</div></div>
@@ -549,18 +587,21 @@ function renderResumen(){
 }
 
 /* ---------- COCKPIT (vencimientos + reclamo) ---------- */
-let cockFilter='venc'; // venc | sem | m30 | all
+let cockFilter='venc'; // venc | sem | m30 | cheq | all
 function diasDe(f){return Math.floor((new Date(vencimientoDe(f)+'T00:00:00')-new Date(todayISO()+'T00:00:00'))/864e5)}
 function diasBadge(d){if(d<0)return `<span class="dias v">${-d}d vencida</span>`;if(d===0)return `<span class="dias v">vence hoy</span>`;if(d<=7)return `<span class="dias p">vence en ${d}d</span>`;return `<span class="dias f">vence en ${d}d</span>`}
 function setCock(f){cockFilter=f;renderCockpit()}
 function renderCockpit(){
-  // facturas con saldo
-  const con=STATE.comprobantes.filter(f=>saldoDe(f)>0.5).map(f=>({f,d:diasDe(f)}));
+  const useCheque=cockFilter==='cheq';
+  // facturas con saldo (las NC no aportan saldo propio, no aparecen acá)
+  const con=STATE.comprobantes.filter(f=>saldoDe(f)>0.5).map(f=>({f,d:diasDe(f),dc:diasChequeDe(f)}));
   const nVenc=con.filter(o=>o.d<0).length, nSem=con.filter(o=>o.d>=0&&o.d<=7).length, nM30=con.filter(o=>o.d>=0&&o.d<=30).length;
+  const conCheq=con.filter(o=>o.dc!=null), nCheq=conCheq.filter(o=>o.dc<=7).length;
   $('cockChips').innerHTML=`
     <div class="chip c-venc ${cockFilter==='venc'?'active':''}" onclick="setCock('venc')">Vencidas <span class="n">${nVenc}</span></div>
     <div class="chip c-prox ${cockFilter==='sem'?'active':''}" onclick="setCock('sem')">Vence esta semana <span class="n">${nSem}</span></div>
     <div class="chip ${cockFilter==='m30'?'active':''}" onclick="setCock('m30')">Próx. 30 días <span class="n">${nM30}</span></div>
+    ${conCheq.length?`<div class="chip c-venc ${cockFilter==='cheq'?'active':''}" onclick="setCock('cheq')">🧾 Cheques a entregar <span class="n">${nCheq||conCheq.length}</span></div>`:''}
     <div class="chip ${cockFilter==='all'?'active':''}" onclick="setCock('all')">Todas con saldo <span class="n">${con.length}</span></div>`;
   // filtro
   const q=($('cockSearch').value||'').toLowerCase(), fv=$('cockVend').value;
@@ -568,18 +609,21 @@ function renderCockpit(){
     if(cockFilter==='venc'&&o.d>=0)return false;
     if(cockFilter==='sem'&&!(o.d>=0&&o.d<=7))return false;
     if(cockFilter==='m30'&&!(o.d>=0&&o.d<=30))return false;
+    if(cockFilter==='cheq'&&o.dc==null)return false;
     const c=getCliente(o.f.clienteId);
     if(fv&&(!c||c.vendedor!==fv))return false;
     if(q&&!((c?c.razonSocial:'').toLowerCase().includes(q)))return false;
     return true;
   });
+  // métrica activa por item
+  const mOf=o=>useCheque?o.dc:o.d;
   // agrupar por cliente
   const grp={};
   list.forEach(o=>{const k=o.f.clienteId||'_';(grp[k]=grp[k]||[]).push(o)});
   const cards=Object.entries(grp).map(([cid,arr])=>{
-    arr.sort((a,b)=>a.d-b.d);
+    arr.sort((a,b)=>mOf(a)-mOf(b));
     const cli=getCliente(cid)||{razonSocial:'⚠ sin cliente'};
-    const tot=arr.reduce((s,o)=>s+saldoDe(o.f),0), worst=arr[0].d;
+    const tot=arr.reduce((s,o)=>s+saldoDe(o.f),0), worst=mOf(arr[0]);
     return {cli,cid,arr,tot,worst};
   }).sort((a,b)=>a.worst-b.worst);
   if(!cards.length){$('cockList').innerHTML='<div class="card empty">Nada para mostrar en este filtro 👌</div>';return}
@@ -588,14 +632,15 @@ function renderCockpit(){
     const ct=(cli.contactos&&cli.contactos[0])||{};
     const cond=cli.condicionDias!=null?+cli.condicionDias:30;
     const condFcX=cli.condicionDiasFcX!=null?+cli.condicionDiasFcX:null;
-    const condTxt=condLabel(cond)+(condFcX!=null&&condFcX!==cond?` · Remito ${condLabel(condFcX)}`:'');
+    const condTxt=condLabel(cond)+(condFcX!=null&&condFcX!==cond?` · Remito ${condLabel(condFcX)}`:'')+(cli.diasCheque!=null?` · 🧾 cheques ${cli.diasCheque}d`:'');
+    const headBadge=useCheque?chequeBadge(worst):diasBadge(worst);
     return `<div class="clicard ${cls}">
       <div class="clihead" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
         <div><div class="nm">${esc(cli.razonSocial)}</div><div class="vd">${esc(cli.vendedor||'')}${ct.nombre?' · '+esc(ct.nombre):''}${arr.length>1?' · '+arr.length+' comprob.':''} <span class="cond-pill">⏱ ${condTxt}</span></div></div>
-        <div class="tot"><div class="s">${fmt(tot)}</div><div class="c">${diasBadge(worst)}</div></div>
+        <div class="tot"><div class="s">${fmt(tot)}</div><div class="c">${headBadge}</div></div>
       </div>
       <div class="clibody" style="display:${worst<0||cards.length<=4?'block':'none'}">
-        ${arr.map(o=>`<div class="fline"><div class="fl-main"><div class="fl-nro">${tipoLabel(o.f.tipo)} ${esc((o.f.ptoVenta?o.f.ptoVenta+'-':'')+(o.f.numero||''))}</div><div class="fl-dates"><span class="fl-d"><span class="lab">Emisión</span><span class="val">${dShow(o.f.fecha)}</span></span><span class="fl-d v"><span class="lab">Vencimiento</span><span class="val">${dShow(vencimientoDe(o.f))}</span></span></div></div><div class="fl-side">${diasBadge(o.d)}<span class="am">${fmt(saldoDe(o.f))}</span><button class="mini go" onclick="event.stopPropagation();openCobro('${o.f.id}')">Cobrar</button></div></div>`).join('')}
+        ${arr.map(o=>{const fc=fechaChequeDe(o.f);const sideBadge=useCheque?chequeBadge(o.dc):diasBadge(o.d);return `<div class="fline"><div class="fl-main"><div class="fl-nro">${tipoLabel(o.f.tipo)} ${esc((o.f.ptoVenta?o.f.ptoVenta+'-':'')+(o.f.numero||''))}</div><div class="fl-dates"><span class="fl-d"><span class="lab">Emisión</span><span class="val">${dShow(o.f.fecha)}</span></span><span class="fl-d v"><span class="lab">Vencimiento</span><span class="val">${dShow(vencimientoDe(o.f))}</span></span>${fc?`<span class="fl-d"><span class="lab">🧾 Cheques</span><span class="val">${dShow(fc)}</span></span>`:''}</div></div><div class="fl-side">${sideBadge}<span class="am">${fmt(saldoDe(o.f))}</span><button class="mini go" onclick="event.stopPropagation();openCobro('${o.f.id}')">Cobrar</button></div></div>`}).join('')}
       </div>
       ${segLine(cli)}
       <div class="cliacts">
@@ -656,13 +701,18 @@ function renderFacturas(){
     return true;
   });
   rows.sort((a,b)=>{const sa=saldoDe(a.f)>0.5?0:1,sb=saldoDe(b.f)>0.5?0:1;if(sa!==sb)return sa-sb;return vencimientoDe(a.f).localeCompare(vencimientoDe(b.f))});
-  $('facBody').innerHTML=rows.length?rows.map(({f,cli})=>{const est=estadoDe(f),m=EM[est]||EM.pendiente,saldo=saldoDe(f),nro=(f.ptoVenta?f.ptoVenta+'-':'')+(f.numero||'');return `<tr>
+  $('facBody').innerHTML=rows.length?rows.map(({f,cli})=>{const est=estadoDe(f),m=EM[est]||EM.pendiente,saldo=saldoDe(f),nro=(f.ptoVenta?f.ptoVenta+'-':'')+(f.numero||'');
+    const nc=isNC(f), asoc=nc?facturaAsociadaDe(f):null, ncAp=!nc?ncAplicadaA(f):0;
+    let salCell;
+    if(nc){salCell=asoc?`<span style="color:var(--faint)">aplicada → ${esc((asoc.ptoVenta?asoc.ptoVenta+'-':'')+(asoc.numero||''))}</span>`:`<span style="color:var(--cobr);font-weight:700">−${fmt(Math.abs(saldo))} cred.</span>`}
+    else{salCell=(saldo>0.5?fmt(saldo):'—')+(ncAp>0?`<div class="cli-meta" style="color:var(--cobr)">NC −${fmt(ncAp)} aplicada</div>`:'')}
+    return `<tr>
     <td><div class="cli-name">${esc(cli?cli.razonSocial:'⚠ sin cliente')}</div><div class="cli-meta">${esc(cli?cli.vendedor:'')}</div></td>
     <td>${tipoLabel(f.tipo)}<div class="cli-meta">${esc(nro)}</div></td>
     <td class="hide num">${dShow(f.fecha)}</td>
-    <td class="num">${dShow(vencimientoDe(f))}</td>
+    <td class="num">${nc?'—':dShow(vencimientoDe(f))}</td>
     <td class="r num">${fmt(f.importe)}</td>
-    <td class="r num" style="font-weight:700">${saldo>0.5?fmt(saldo):'—'}</td>
+    <td class="r num" style="font-weight:700">${salCell}</td>
     <td><span class="badge ${m.c}">${m.l}</span></td>
     <td><div class="row-acts">${saldo>0.5?`<button class="mini go" onclick="openCobro('${f.id}')">Cobrar</button>`:''}<button class="mini" onclick="openFactura('${f.id}')">✎</button><button class="mini del" onclick="deleteFactura('${f.id}')">🗑</button></div></td></tr>`}).join(''):'<tr><td colspan="8" class="empty">No hay facturas. Cargá una con “+ Factura” o desde la pestaña Importar.</td></tr>';
 }
@@ -670,12 +720,12 @@ function renderCliList(){$('cliList').innerHTML=STATE.clientes.map(c=>`<option v
 function openFactura(id){
   editingFac=id?STATE.comprobantes.find(f=>f.id===id):null;
   $('facTitle').textContent=editingFac?'Editar factura':'Nueva factura';$('facDelBtn').style.display=editingFac?'block':'none';renderCliList();
-  if(editingFac){const c=getCliente(editingFac.clienteId);$('ff_cliInput').value=c?c.razonSocial:'';$('ff_tipo').value=editingFac.tipo||'FC_A';$('ff_numero').value=(editingFac.ptoVenta?editingFac.ptoVenta+'-':'')+(editingFac.numero||'');$('ff_fecha').value=(editingFac.fecha||'').slice(0,10);$('ff_importe').value=editingFac.importe||'';$('ff_cobrado').value=(+editingFac.importe||0)-saldoDe(editingFac);$('ff_obs').value=editingFac.obs||'';
+  if(editingFac){const c=getCliente(editingFac.clienteId);$('ff_cliInput').value=c?c.razonSocial:'';$('ff_tipo').value=editingFac.tipo||'FC_A';$('ff_numero').value=(editingFac.ptoVenta?editingFac.ptoVenta+'-':'')+(editingFac.numero||'');$('ff_fecha').value=(editingFac.fecha||'').slice(0,10);$('ff_importe').value=editingFac.importe||'';$('ff_cobrado').value=(+editingFac.importe||0)-saldoDe(editingFac);$('ff_asociada').value=editingFac.asociadaNum||'';$('ff_obs').value=editingFac.obs||'';onFacTipoChange();
     const esManual=!!editingFac.vencManual;
     const auto=vencimientoDe({...editingFac,vencManual:false,fechaVencimiento:''});
     $('ff_vencManual').checked=esManual;$('ff_venc').value=esManual?(editingFac.fechaVencimiento||'').slice(0,10):auto;$('ff_venc').disabled=!esManual;
   }
-  else{$('ff_cliInput').value='';$('ff_tipo').value='FC_A';$('ff_numero').value='';$('ff_fecha').value=todayISO();$('ff_importe').value='';$('ff_cobrado').value=0;$('ff_obs').value='';$('ff_vencManual').checked=false;$('ff_venc').disabled=true;refreshVencForm()}
+  else{$('ff_cliInput').value='';$('ff_tipo').value='FC_A';$('ff_numero').value='';$('ff_fecha').value=todayISO();$('ff_importe').value='';$('ff_cobrado').value=0;$('ff_asociada').value='';$('ff_obs').value='';$('ff_vencManual').checked=false;$('ff_venc').disabled=true;onFacTipoChange();refreshVencForm()}
   openOverlay('ovFactura');
 }
 function calcVencForm(){
@@ -684,6 +734,7 @@ function calcVencForm(){
   if(!cli)return addDays(fechaIso,30);
   return vencimientoDe({clienteId:cli.id,tipo:$('ff_tipo').value,fecha:fechaIso});
 }
+function onFacTipoChange(){const esNC=($('ff_tipo').value||'').startsWith('NC_');$('ff_asociadaRow').style.display=esNC?'block':'none';refreshVencForm()}
 function refreshVencForm(){if(!$('ff_vencManual').checked)$('ff_venc').value=calcVencForm()}
 function onVencManualToggle(){const m=$('ff_vencManual').checked;$('ff_venc').disabled=!m;if(!m)refreshVencForm()}
 function onFacClienteInput(){refreshVencForm()}
@@ -694,7 +745,7 @@ function saveFactura(){
   const imp=+$('ff_importe').value;if(!imp){toast('Falta el importe','bad');return}
   const sp=splitNro($('ff_numero').value);const cobrado=+$('ff_cobrado').value||0;
   const esManual=$('ff_vencManual').checked;
-  const obj={clienteId:cli.id,tipo:$('ff_tipo').value,ptoVenta:sp.pto,numero:sp.num,fecha:$('ff_fecha').value||todayISO(),importe:imp,saldo:Math.max(0,imp-cobrado),cobrado:cobrado,fechaVencimiento:esManual?($('ff_venc').value||''):'',vencManual:esManual,obs:$('ff_obs').value.trim(),updatedAt:NOW()};
+  const obj={clienteId:cli.id,tipo:$('ff_tipo').value,ptoVenta:sp.pto,numero:sp.num,fecha:$('ff_fecha').value||todayISO(),importe:imp,saldo:Math.max(0,imp-cobrado),cobrado:cobrado,asociadaNum:($('ff_tipo').value||'').startsWith('NC_')?$('ff_asociada').value.trim():'',fechaVencimiento:esManual?($('ff_venc').value||''):'',vencManual:esManual,obs:$('ff_obs').value.trim(),updatedAt:NOW()};
   if(editingFac)Object.assign(editingFac,obj);else STATE.comprobantes.push({id:uid(),pagos:[],createdAt:NOW(),...obj});
   closeOverlay('ovFactura');saveToCloud();renderFacturas();renderResumen();toast('Factura guardada','ok');
 }
@@ -720,11 +771,13 @@ function renderClientes(){
   let rows=STATE.clientes.filter(c=>{if(fv&&c.vendedor!==fv)return false;if(q&&!((c.razonSocial+' '+(c.codigo||'')+' '+(c.cuit||'')).toLowerCase().includes(q)))return false;return true}).map(c=>({c,saldo:saldoCliente(c.id)})).sort((a,b)=>b.saldo-a.saldo||a.c.razonSocial.localeCompare(b.c.razonSocial));
   $('cliBody').innerHTML=rows.length?rows.map(({c,saldo})=>{const ct=(c.contactos&&c.contactos[0])||{};const wa=waLink(ct.telefono);
     const contactStr=(ct.nombre||ct.telefono)?`${esc(ct.nombre||'')}${ct.telefono?` · <span class="num">${esc(ct.telefono)}</span>${wa?` <a href="${wa}" target="_blank" onclick="event.stopPropagation()">WA</a>`:''}`:''}`:'<span style="color:var(--faint)">—</span>';
-    return `<tr onclick="openCliente('${c.id}')" style="cursor:pointer"><td><div class="cli-name">${esc(c.razonSocial)}</div><div class="cli-meta">${esc(c.codigo||'')}${c.cuit?' · '+esc(c.cuit):''}</div></td><td class="hide"><span class="vend">${esc(c.vendedor||'—')}</span></td><td class="hide num">${condLabel(c.condicionDias)}</td><td>${contactStr}</td><td class="r num" style="font-weight:700">${saldo>0.5?fmt(saldo):'<span style="color:var(--faint)">$0</span>'}</td><td><div class="row-acts"><button class="mini" onclick="event.stopPropagation();openCliente('${c.id}')">✎</button></div></td></tr>`}).join(''):'<tr><td colspan="6" class="empty">No hay clientes. Importá el respaldo en Importar o agregá uno.</td></tr>';
+    const salTxt=saldo>0.5?fmt(saldo):(saldo<-0.5?`<span style="color:var(--cobr)">${fmt(saldo)} a favor</span>`:'<span style="color:var(--faint)">$0</span>');
+    const condTxt=condLabel(c.condicionDias)+(c.diasCheque!=null?` <span class="cli-meta">🧾 cheq ${c.diasCheque}d</span>`:'');
+    return `<tr onclick="openCliente('${c.id}')" style="cursor:pointer"><td><div class="cli-name">${esc(c.razonSocial)}</div><div class="cli-meta">${esc(c.codigo||'')}${c.cuit?' · '+esc(c.cuit):''}</div></td><td class="hide"><span class="vend">${esc(c.vendedor||'—')}</span></td><td class="hide num">${condTxt}</td><td>${contactStr}</td><td class="r num" style="font-weight:700">${salTxt}</td><td><div class="row-acts"><button class="mini" onclick="event.stopPropagation();openCliente('${c.id}')">✎</button></div></td></tr>`}).join(''):'<tr><td colspan="6" class="empty">No hay clientes. Importá el respaldo en Importar o agregá uno.</td></tr>';
 }
 function openCliente(id){
   editingCli=id?STATE.clientes.find(c=>c.id===id):null;$('cliTitle').textContent=editingCli?'Editar cliente':'Nuevo cliente';$('cliDelBtn').style.display=editingCli?'block':'none';
-  const c=editingCli||{};$('f_razon').value=c.razonSocial||'';$('f_codigo').value=c.codigo||'';$('f_cuit').value=c.cuit||'';$('f_vend').value=c.vendedor||'Winflex';$('f_plazo').value=c.condicionDias!=null?c.condicionDias:30;$('f_modo').value=c.modoVencimiento||'factura';$('f_obs').value=c.obs||'';
+  const c=editingCli||{};$('f_razon').value=c.razonSocial||'';$('f_codigo').value=c.codigo||'';$('f_cuit').value=c.cuit||'';$('f_vend').value=c.vendedor||'Winflex';$('f_plazo').value=c.condicionDias!=null?c.condicionDias:30;$('f_modo').value=c.modoVencimiento||'factura';$('f_cheque').value=(c.diasCheque!=null?c.diasCheque:'');$('f_obs').value=c.obs||'';
   $('f_contado').checked=(+c.condicionDias===0&&c.condicionDias!=null);$('f_plazo').disabled=$('f_contado').checked;
   $('f_contactos').innerHTML='';(c.contactos&&c.contactos.length?c.contactos:[{}]).forEach(addContactRow);openOverlay('ovCliente');
 }
@@ -735,7 +788,8 @@ function saveCliente(){
   const contactos=[...$('f_contactos').querySelectorAll('.contact-row')].map(r=>{const[n,t,e]=r.querySelectorAll('input');return{nombre:n.value.trim(),telefono:t.value.trim(),email:e.value.trim()}}).filter(c=>c.nombre||c.telefono||c.email);
   const plazoRaw=$('f_plazo').value.trim();
   const plazo=$('f_contado').checked?0:(plazoRaw===''?30:Math.max(0,Math.floor(+plazoRaw)||0));
-  const obj={razonSocial:razon,codigo:$('f_codigo').value.trim(),cuit:$('f_cuit').value.trim(),vendedor:$('f_vend').value,condicionDias:plazo,modoVencimiento:$('f_modo').value,contactos,obs:$('f_obs').value.trim(),updatedAt:NOW()};
+  const chRaw=$('f_cheque').value.trim();const diasCheque=chRaw===''?null:Math.max(0,Math.floor(+chRaw)||0);
+  const obj={razonSocial:razon,codigo:$('f_codigo').value.trim(),cuit:$('f_cuit').value.trim(),vendedor:$('f_vend').value,condicionDias:plazo,modoVencimiento:$('f_modo').value,diasCheque,contactos,obs:$('f_obs').value.trim(),updatedAt:NOW()};
   if(editingCli)Object.assign(editingCli,obj);else STATE.clientes.push({id:uid(),createdAt:NOW(),...obj});
   closeOverlay('ovCliente');saveToCloud();renderClientes();renderCliList();renderResumen();toast('Cliente guardado','ok');
 }
@@ -770,11 +824,22 @@ function toIsoDate(s){const m=s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})
 function parseArMoney(s){if(!s)return 0;const str=String(s).trim();if(!str)return 0;const lc=str.lastIndexOf(','),ld=str.lastIndexOf('.');let n=str;if(lc>ld){const t=str.substring(lc+1);n=(t.length===3&&/^\d+$/.test(t))?str.replace(/,/g,''):str.replace(/\./g,'').replace(',','.')}else if(ld>lc){const t=str.substring(ld+1);n=(t.length===3&&/^\d+$/.test(t)&&lc===-1)?str.replace(/\./g,''):str.replace(/,/g,'')}return parseFloat(n)||0}
 function extractFacturaFields(text){
   const out={};
+  // Detección por título primero: NCRED / NOTA DE CRÉDITO → NC
+  const esNCtit=/NCRED|NOTA\s+DE\s+CR[EÉ]D/i.test(text);
   const codM=text.match(/C[oó]d\.?\s*0*([0-9]{1,3})\b/i);
-  if(codM){const cd=parseInt(codM[1]);const map={1:'A',2:'A',3:'A',6:'B',7:'B',8:'B',11:'C',12:'C',13:'C',19:'E',20:'E',21:'E',51:'M',52:'M',53:'M'};if(map[cd])out.tipo='FC_'+map[cd]}
+  if(codM){const cd=parseInt(codM[1]);
+    // Códigos AFIP: NC A=3, NC B=8, NC C=13 (restan). FC A=1, FC B=6, FC C=11.
+    const ncMap={3:'A',8:'B',13:'C'};
+    const fcMap={1:'A',2:'A',6:'B',7:'B',11:'C',12:'C',19:'E',20:'E',21:'E',51:'M',52:'M',53:'M'};
+    if(ncMap[cd])out.tipo='NC_'+ncMap[cd];
+    else if(fcMap[cd])out.tipo='FC_'+fcMap[cd];
+  }
+  if(!out.tipo&&esNCtit){const m=text.match(/NCRED\s*([ABCEM])\b/i)||text.match(/NOTA\s+DE\s+CR[EÉ]D\w*\s*([ABCEM])\b/i);out.tipo='NC_'+((m&&m[1].toUpperCase())||'A')}
   if(!out.tipo){const m=text.match(/FACT(?:URA)?(?:\s+ELECT(?:R[OÓ]NICA)?)?\s+([ABCEM])\b/i);if(m)out.tipo='FC_'+m[1].toUpperCase()}
   if(!out.tipo&&/movimiento\s+interno|documento\s+no\s+v[aá]lido\s+como\s+factura|remito\s+interno/i.test(text))out.tipo='FC_X';
   if(!out.tipo)out.tipo='FC_A';
+  // NC: número de factura asociada ("Asociada Fc.3035")
+  if(out.tipo.startsWith('NC_')){const am=text.match(/Asociad[ao]\s*(?:a\s*)?Fc\.?\s*N?[°º]?\s*0*(\d{1,8})/i);if(am)out.asociadaNum=am[1]}
   const nroM=text.match(/(?:N[°º]?\s*:?\s*)?(\d{4,5})\s*[-–]\s*(\d{7,8})\b/);
   if(nroM){out.ptoVenta=nroM[1].padStart(4,'0');out.numero=nroM[2].padStart(8,'0')}
   else if(out.tipo==='FC_X'){const r=text.match(/(?:N[°ºo]\s*[:\.]?\s*|n[uú]mero\s*[:\.]?\s*)(\d{4,8})/i)||text.match(/^\s*(\d{5,8})\s*$/m)||text.match(/\b(\d{5,6})\b/);if(r){out.ptoVenta='';out.numero=r[1]}}
@@ -799,7 +864,8 @@ function renderPdfPreview(){
     ${pdfPending.map(p=>{
       if(p.error)return `<tr><td>${esc(p.file)}</td><td colspan="4" style="color:var(--venc)">⚠ ${esc(p.error)}</td><td><button class="mini del" onclick="removePdf('${p.id}')">quitar</button></td></tr>`;
       const f=p.fields;const nro=(f.ptoVenta?f.ptoVenta+'-':'')+(f.numero||'?');
-      return `<tr><td class="cli-meta">${esc(p.file)}</td><td>${tipoLabel(f.tipo)}</td><td class="num">${esc(nro)}</td><td class="num">${dShow(f.fecha)}</td><td class="r num">${f.importe?fmt(f.importe):'<span style="color:var(--venc)">?</span>'}</td>
+      const tipoCell=tipoLabel(f.tipo)+(f.tipo&&f.tipo.startsWith('NC_')?`<div class="cli-meta" style="color:var(--cobr)">resta${f.asociadaNum?' → Fc '+esc(f.asociadaNum):' (crédito suelto)'}</div>`:'');
+      return `<tr><td class="cli-meta">${esc(p.file)}</td><td>${tipoCell}</td><td class="num">${esc(nro)}</td><td class="num">${dShow(f.fecha)}</td><td class="r num">${f.importe?fmt(f.importe):'<span style="color:var(--venc)">?</span>'}</td>
       <td><select class="filter" style="padding:6px 8px;font-size:12.5px;max-width:220px" onchange="pdfSetCliente('${p.id}',this.value)">${opts(p.clienteId)}</select>${f.cuit?`<div class="cli-meta">${esc(f.cuit)}</div>`:''}</td></tr>`;
     }).join('')}</tbody></table></div>
     <div style="display:flex;gap:10px;margin-top:14px;align-items:center"><button class="btn" ${okCount?'':'disabled'} onclick="confirmPdf()">Confirmar e importar ${okCount} factura(s)</button><button class="btn ghost sm" onclick="pdfPending=[];renderPdfPreview()">Descartar todo</button><span class="hint" style="margin:0">${pdfPending.length-okCount} sin cliente o sin importe quedan afuera.</span></div>`;
@@ -812,7 +878,7 @@ function confirmPdf(){
     if(p.error||!p.clienteId||!p.fields.importe)return p.error?false:true;
     const f=p.fields;
     const dup=STATE.comprobantes.find(x=>x.clienteId===p.clienteId&&x.numero===(f.numero||'')&&(f.numero||''));
-    if(!dup){STATE.comprobantes.push({id:uid(),clienteId:p.clienteId,tipo:f.tipo||'FC_A',ptoVenta:f.ptoVenta||'',numero:f.numero||'',fecha:f.fecha||todayISO(),importe:+f.importe||0,saldo:+f.importe||0,cobrado:0,pagos:[],obs:'',origenImport:{tipo:'pdf',archivo:p.file,importedAt:NOW()},createdAt:NOW(),updatedAt:NOW()});add++}
+    if(!dup){STATE.comprobantes.push({id:uid(),clienteId:p.clienteId,tipo:f.tipo||'FC_A',ptoVenta:f.ptoVenta||'',numero:f.numero||'',fecha:f.fecha||todayISO(),importe:+f.importe||0,saldo:+f.importe||0,cobrado:0,asociadaNum:f.asociadaNum||'',pagos:[],obs:'',origenImport:{tipo:'pdf',archivo:p.file,importedAt:NOW()},createdAt:NOW(),updatedAt:NOW()});add++}
     return false;
   });
   saveToCloud();renderPdfPreview();renderAll();toast(add+' factura(s) importada(s)','ok');
@@ -822,12 +888,12 @@ function confirmPdf(){
 function mapClienteIn(c){
   let contactos=c.contactos;
   if(!contactos||!contactos.length){if(c.contactoNombre||c.contactoTelefono||c.contactoEmail)contactos=[{nombre:c.contactoNombre||'',telefono:c.contactoTelefono||'',email:c.contactoEmail||''}];else contactos=[]}
-  return {id:c.id||uid(),codigo:c.codigo||'',cuit:c.cuit||'',razonSocial:c.razonSocial||'',vendedor:VENDEDORES.includes(c.vendedor)?c.vendedor:'Winflex',condicionDias:c.condicionDias!=null?+c.condicionDias:30,modoVencimiento:c.modoVencimiento||'factura',condicionDiasFcX:c.condicionDiasFcX!=null?+c.condicionDiasFcX:null,modoVencimientoFcX:c.modoVencimientoFcX||null,contactos,seguimiento:c.seguimiento||null,obs:c.obs||'',createdAt:c.createdAt||NOW(),updatedAt:NOW()};
+  return {id:c.id||uid(),codigo:c.codigo||'',cuit:c.cuit||'',razonSocial:c.razonSocial||'',vendedor:VENDEDORES.includes(c.vendedor)?c.vendedor:'Winflex',condicionDias:c.condicionDias!=null?+c.condicionDias:30,modoVencimiento:c.modoVencimiento||'factura',condicionDiasFcX:c.condicionDiasFcX!=null?+c.condicionDiasFcX:null,modoVencimientoFcX:c.modoVencimientoFcX||null,diasCheque:(c.diasCheque!=null&&c.diasCheque!=='')?+c.diasCheque:null,contactos,seguimiento:c.seguimiento||null,obs:c.obs||'',createdAt:c.createdAt||NOW(),updatedAt:NOW()};
 }
 function mapFacturaIn(f){
   const imp=+f.importe||0;let cobrado;
   if(f.cobrado!=null)cobrado=+f.cobrado;else if(f.saldo!=null)cobrado=Math.max(0,imp-(+f.saldo||0));else cobrado=0;
-  return {id:f.id||uid(),clienteId:f.clienteId||'',tipo:f.tipo||'FC_A',ptoVenta:f.ptoVenta||'',numero:f.numero||'',fecha:(f.fecha||todayISO()).slice(0,10),fechaRemito:f.fechaRemito||null,importe:imp,cobrado,saldo:Math.max(0,imp-cobrado),condicionOverride:f.condicionOverride!=null?f.condicionOverride:null,modoOverride:f.modoOverride||null,pagos:f.pagos||[],fechaVencimiento:(f.fechaVencimiento||'').slice(0,10),vencManual:!!f.vencManual,obs:f.obs||'',origenImport:f.origenImport||{tipo:'import'},createdAt:f.createdAt||NOW(),updatedAt:NOW()};
+  return {id:f.id||uid(),clienteId:f.clienteId||'',tipo:f.tipo||'FC_A',ptoVenta:f.ptoVenta||'',numero:f.numero||'',fecha:(f.fecha||todayISO()).slice(0,10),fechaRemito:f.fechaRemito||null,importe:imp,cobrado,saldo:Math.max(0,imp-cobrado),asociadaNum:f.asociadaNum||'',condicionOverride:f.condicionOverride!=null?f.condicionOverride:null,modoOverride:f.modoOverride||null,pagos:f.pagos||[],fechaVencimiento:(f.fechaVencimiento||'').slice(0,10),vencManual:!!f.vencManual,obs:f.obs||'',origenImport:f.origenImport||{tipo:'import'},createdAt:f.createdAt||NOW(),updatedAt:NOW()};
 }
 function importJSON(ev,kind){
   const file=ev.target.files[0];if(!file)return;const rd=new FileReader();
