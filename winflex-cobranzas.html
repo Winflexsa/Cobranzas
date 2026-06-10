@@ -453,6 +453,7 @@ const LS={bin:'wfc_bin',key:'wfc_key',user:'wfc_user',data:'wfc_data'};
 let STATE={clientes:[],comprobantes:[],meta:{version:1}};
 let CURRENT_USER=null, editingCli=null, editingFac=null, cobroTarget=null, seguimientoTarget=null;
 let saving=false, savePending=false, pdfPending=[];
+let LOAD_OK=false; // true solo si loadFromCloud leyó bien la nube (o modo local); bloquea saveToCloud si la carga falló
 
 const $=id=>document.getElementById(id);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -557,23 +558,33 @@ function binURL(){return 'https://api.jsonbin.io/v3/b/'+localStorage.getItem(LS.
 function binHeaders(){return {'Content-Type':'application/json','X-Master-Key':localStorage.getItem(LS.key),'X-Bin-Meta':'false'}}
 async function loadFromCloud(show){
   const bin=localStorage.getItem(LS.bin),key=localStorage.getItem(LS.key);
-  if(!bin||!key){setCloud('local','Local');return}
+  if(!bin||!key){LOAD_OK=true;setCloud('local','Local');return}
   setCloud('busy','Sincronizando…');
   try{
     const r=await fetch(binURL()+'/latest',{headers:binHeaders()});if(!r.ok)throw new Error('HTTP '+r.status);
     const d=await r.json();const rec=d.record||d;
     if(rec&&(rec.clientes)){STATE=normalizeState(rec);saveLocal();renderAll()}
+    LOAD_OK=true;
     setCloud('ok','En la nube');if(show)toast('Datos cargados de la nube','ok');
-  }catch(e){setCloud('bad','Error de sync');if(show)toast('No se pudo conectar: '+e.message,'bad')}
+  }catch(e){LOAD_OK=false;setCloud('bad','Error de sync — guardado bloqueado, recargá');if(show)toast('No se pudo conectar: '+e.message+'. No se guardará hasta recargar.','bad')}
 }
 async function saveToCloud(){
   const bin=localStorage.getItem(LS.bin),key=localStorage.getItem(LS.key);saveLocal();
   if(!bin||!key){setCloud('local','Local');return}
+  if(!LOAD_OK){setCloud('bad','Guardado bloqueado: recargá');toast('⚠ No se guardó: la carga inicial falló. Recargá la página.','bad');return}
   if(saving){savePending=true;return}
   saving=true;setCloud('busy','Guardando…');
   try{
+    // Tripwire: no pisar la nube con clientes/comprobantes vacíos si la nube tiene datos
+    try{
+      const chk=await fetch(binURL()+'/latest',{headers:binHeaders()});
+      if(chk.ok){const cd=await chk.json();const cur=cd.record||cd;
+        if(((cur.clientes||[]).length>0 && (STATE.clientes||[]).length===0) || ((cur.comprobantes||[]).length>0 && (STATE.comprobantes||[]).length===0)){
+          saving=false;setCloud('bad','Guardado bloqueado: evitaría borrar datos');toast('⛔ Guardado BLOQUEADO: dejaría clientes/comprobantes en cero y la nube tiene datos. Recargá la página.','bad');return;}
+      }
+    }catch(_){}
     STATE.meta=STATE.meta||{};STATE.meta.lastUpdate=NOW();STATE.meta.lastUser=CURRENT_USER;
-    const r=await fetch(binURL(),{method:'PUT',headers:binHeaders(),body:JSON.stringify(STATE)});if(!r.ok)throw new Error('HTTP '+r.status);
+    const r=await fetch(binURL(),{method:'PUT',headers:{...binHeaders(),'X-Bin-Versioning':'true'},body:JSON.stringify(STATE)});if(!r.ok)throw new Error('HTTP '+r.status);
     setCloud('ok','En la nube');
   }catch(e){setCloud('bad','Error al guardar');toast('No se pudo guardar: '+e.message,'bad')}
   finally{saving=false;if(savePending){savePending=false;saveToCloud()}}
