@@ -268,6 +268,7 @@
   <!-- COBRANZA (cockpit) -->
   <section class="tab active" id="tab-resumen">
     <div class="kpis" id="kpis"></div>
+    <div id="ncWarnBox"></div>
     <div id="fueraBox"></div>
     <div class="chips" id="cockChips"></div>
     <div class="toolbar" style="margin-bottom:14px">
@@ -489,19 +490,35 @@ function cliSituacion(c){return (c&&(c.situacion==='moroso'||c.situacion==='juic
 function fueraCartera(f){ if(f&&f.incobrable) return 'incobrable'; const s=cliSituacion(getCliente(f.clienteId)); return s||null; }
 const SITU={moroso:{l:'Moroso',ico:'🟠'},juicio:{l:'En juicio',ico:'⚖️'},incobrable:{l:'Incobrable',ico:'🚫'}};
 function normNum(s){return String(s||'').replace(/\D/g,'').replace(/^0+/,'')}
+// número de comprobante normalizado, ignorando el punto de venta.
+// "0001-00012345" -> "12345" ; "00012345" -> "12345" ; "12345" -> "12345"
+function comproNum(s){const raw=String(s||'').trim();if(!raw)return '';const p=raw.split('-');return normNum(p[p.length-1])}
+// punto de venta normalizado si el número lo trae (antes del guión); si no, ''
+function comproPto(s){const raw=String(s||'').trim();const i=raw.lastIndexOf('-');return i<0?'':normNum(raw.slice(0,i))}
+// ¿la NC apunta a esta factura? mismo cliente + mismo número (ignora pto vta).
+// Si ambos traen pto vta y difieren, no matchea (desambigua números repetidos).
+function ncApuntaA(nc,fac){
+  if(!isNC(nc)||isNC(fac)||!nc.asociadaNum)return false;
+  if(nc.clienteId!==fac.clienteId)return false;
+  const an=comproNum(nc.asociadaNum),fn=comproNum(fac.numero);
+  if(!an||an!==fn)return false;
+  const ap=comproPto(nc.asociadaNum),fp=normNum(fac.ptoVenta);
+  if(ap&&fp&&ap!==fp)return false;
+  return true;
+}
 // factura a la que apunta una NC (mismo cliente, número asociado)
 function facturaAsociadaDe(nc){
   if(!isNC(nc)||!nc.asociadaNum)return null;
-  const num=normNum(nc.asociadaNum); if(!num)return null;
-  return STATE.comprobantes.find(x=>!isNC(x)&&x.clienteId===nc.clienteId&&normNum(x.numero)===num)||null;
+  return STATE.comprobantes.find(x=>ncApuntaA(nc,x))||null;
 }
 // total de NC aplicado a una factura
 function ncAplicadaA(fac){
   if(!fac||isNC(fac))return 0;
-  const num=normNum(fac.numero); if(!num)return 0;
-  return STATE.comprobantes.filter(x=>isNC(x)&&x.clienteId===fac.clienteId&&normNum(x.asociadaNum)===num)
+  return STATE.comprobantes.filter(x=>ncApuntaA(x,fac))
     .reduce((s,x)=>s+Math.max(0,(+x.importe||0)-(+x.cobrado||0)),0);
 }
+// NCs que declaran una factura asociada pero no la encuentran (quedan restando en silencio)
+function ncSinVincular(){return STATE.comprobantes.filter(x=>isNC(x)&&x.asociadaNum&&!facturaAsociadaDe(x))}
 function saldoDe(f){
   if(isNC(f)){
     // NC asociada a una factura existente: su efecto ya está netteado en la factura → no aporta saldo propio
@@ -598,6 +615,13 @@ function switchTab(t){
   document.querySelectorAll('.tab').forEach(s=>s.classList.toggle('active',s.id==='tab-'+t));
   if(t==='resumen')renderResumen();if(t==='facturas')renderFacturas();if(t==='clientes')renderClientes();if(t==='config')renderStats();
 }
+function goNCsinVincular(){
+  const ncMal=ncSinVincular();
+  if(!ncMal.length){renderResumen();return}
+  switchTab('facturas');
+  openFactura(ncMal[0].id);
+  toast(`${ncMal.length} NC sin vincular — corregí la Fc asociada`,'bad');
+}
 function renderAll(){renderResumen();renderFacturas();renderClientes();renderStats();renderCliList()}
 
 /* ---------- RESUMEN ---------- */
@@ -615,6 +639,8 @@ function renderResumen(){
     <div class="kpi venc"><div class="bar"></div><div class="lab">Vencido</div><div class="val num" style="color:var(--venc)">${fmtM(vencido)}</div><div class="meta">${porCobrar?Math.round(vencido/porCobrar*100):0}% del saldo</div></div>
     <div class="kpi cobr"><div class="bar"></div><div class="lab">Cobrado</div><div class="val num">${fmtM(cobradoTot)}</div><div class="meta">de ${fmtM(facturado)} facturado</div></div>
     <div class="kpi tot"><div class="bar"></div><div class="lab">A vencer</div><div class="val num">${fmtM(porVencer)}</div><div class="meta">cartera activa</div></div>`;
+  const ncMal=ncSinVincular();
+  $('ncWarnBox').innerHTML = ncMal.length ? `<div class="fuera-grid" style="grid-template-columns:1fr"><div class="fuera-cell" style="border-color:var(--venc);cursor:pointer" onclick="goNCsinVincular()"><span class="fl" style="color:var(--venc)">⚠ ${ncMal.length} nota${ncMal.length>1?'s':''} de crédito sin vincular</span><span class="fn">No netean contra su factura → dejan saldo vencido fantasma. Tocá para corregir.</span></div></div>` : '';
   const fueraTot=morosoSaldo+juicioSaldo+incobSaldo;
   $('fueraBox').innerHTML = fueraTot>0.5 ? `<div class="fuera-grid">
     <div class="fuera-cell mor" onclick="setCock('moroso')"><span class="fl">🟠 Morosos</span><span class="fv num">${fmtM(morosoSaldo)}</span><span class="fn">${nMorC} comprob.</span></div>
@@ -763,7 +789,7 @@ function renderFacturas(){
   $('facBody').innerHTML=rows.length?rows.map(({f,cli})=>{const est=estadoDe(f),m=EM[est]||EM.pendiente,saldo=saldoDe(f),nro=(f.ptoVenta?f.ptoVenta+'-':'')+(f.numero||'');
     const nc=isNC(f), asoc=nc?facturaAsociadaDe(f):null, ncAp=!nc?ncAplicadaA(f):0;
     let salCell;
-    if(nc){salCell=asoc?`<span style="color:var(--faint)">aplicada → ${esc((asoc.ptoVenta?asoc.ptoVenta+'-':'')+(asoc.numero||''))}</span>`:`<span style="color:var(--cobr);font-weight:700">−${fmt(Math.abs(saldo))} cred.</span>`}
+    if(nc){salCell=asoc?`<span style="color:var(--faint)">aplicada → ${esc((asoc.ptoVenta?asoc.ptoVenta+'-':'')+(asoc.numero||''))}</span>`:(f.asociadaNum?`<span class="badge b-venc" title="No encuentra la Fc ${esc(f.asociadaNum)} de este cliente">⚠ NC sin vincular</span>`:`<span style="color:var(--cobr);font-weight:700">−${fmt(Math.abs(saldo))} cred.</span>`)}
     else{salCell=(saldo>0.5?fmt(saldo):'—')+(ncAp>0?`<div class="cli-meta" style="color:var(--cobr)">NC −${fmt(ncAp)} aplicada</div>`:'')}
     return `<tr>
     <td><div class="cli-name">${esc(cli?cli.razonSocial:'⚠ sin cliente')}</div><div class="cli-meta">${esc(cli?cli.vendedor:'')}</div></td>
@@ -898,7 +924,7 @@ function extractFacturaFields(text){
   if(!out.tipo&&/movimiento\s+interno|documento\s+no\s+v[aá]lido\s+como\s+factura|remito\s+interno/i.test(text))out.tipo='FC_X';
   if(!out.tipo)out.tipo='FC_A';
   // NC: número de factura asociada ("Asociada Fc.3035")
-  if(out.tipo.startsWith('NC_')){const am=text.match(/Asociad[ao]\s*(?:a\s*)?Fc\.?\s*N?[°º]?\s*0*(\d{1,8})/i);if(am)out.asociadaNum=am[1]}
+  if(out.tipo.startsWith('NC_')){const am=text.match(/Asociad[ao]\s*(?:a\s*)?Fc\.?\s*N?[°º]?\s*(\d{1,5}-\d{1,8}|\d{1,8})/i);if(am)out.asociadaNum=am[1]}
   const nroM=text.match(/(?:N[°º]?\s*:?\s*)?(\d{4,5})\s*[-–]\s*(\d{7,8})\b/);
   if(nroM){out.ptoVenta=nroM[1].padStart(4,'0');out.numero=nroM[2].padStart(8,'0')}
   else if(out.tipo==='FC_X'){const r=text.match(/(?:N[°ºo]\s*[:\.]?\s*|n[uú]mero\s*[:\.]?\s*)(\d{4,8})/i)||text.match(/^\s*(\d{5,8})\s*$/m)||text.match(/\b(\d{5,6})\b/);if(r){out.ptoVenta='';out.numero=r[1]}}
