@@ -69,6 +69,7 @@
   nav button:hover:not(.active){color:var(--text)}
 
   .tab{display:none}.tab.active{display:block;animation:fade .2s}
+body.modo-modulo nav{display:none}
   @keyframes fade{from{opacity:0;transform:translateY(4px)}}
 
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
@@ -563,6 +564,11 @@ function startApp(){
   loadLocal();
   if(localStorage.getItem(LS.bin)) loadFromCloud(true); else {renderAll();setCloud('local','Local')}
   setInterval(()=>{if(localStorage.getItem(LS.bin)&&!saving)loadFromCloud(false)},60000);
+  if(ES_HIJA){
+    document.body.classList.add('modo-modulo');
+    try{document.title=(MODULOS[MODULO_VENTANA]||'')+' · Seguimiento Cobranzas';}catch(e){}
+    activarInterno(MODULO_VENTANA);
+  }
 }
 function fillVendSelects(){const o=VENDEDORES.map(v=>`<option>${v}</option>`).join('');$('f_vend').innerHTML=o;$('facVend').innerHTML='<option value="">Todos los vendedores</option>'+o;$('cliVend').innerHTML='<option value="">Todos los vendedores</option>'+o;$('cockVend').innerHTML='<option value="">Todos</option>'+o}
 
@@ -610,11 +616,34 @@ function saveConfig(){const b=$('cfgBin').value.trim(),k=$('cfgKey').value.trim(
 function refreshNow(){loadFromCloud(true)}
 
 /* ---------- NAV ---------- */
-function switchTab(t){
+// ── NAVEGACIÓN POR VENTANAS (mismo sistema que Sueldos/Horas) ──────
+const MODULOS={resumen:'📊 Cobranza',facturas:'📄 Facturas',clientes:'👥 Clientes',importar:'⬆ Importar',config:'⚙️ Config'};
+const _paramTab=(function(){try{return new URLSearchParams(location.search).get('tab');}catch(_){return null;}})();
+const MODULO_VENTANA=(_paramTab&&MODULOS[_paramTab])?_paramTab:null;
+const ES_HIJA=!!MODULO_VENTANA;
+function activarInterno(t){
+  if(!MODULOS[t])return;
+  if(document.body.classList.contains('modo-modulo')&&t!==MODULO_VENTANA){document.body.classList.remove('modo-modulo');}
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
   document.querySelectorAll('.tab').forEach(s=>s.classList.toggle('active',s.id==='tab-'+t));
   if(t==='resumen')renderResumen();if(t==='facturas')renderFacturas();if(t==='clientes')renderClientes();if(t==='config')renderStats();
 }
+function abrirModulo(t){
+  if(!MODULOS[t])return;
+  if(ES_HIJA&&t===MODULO_VENTANA)return;
+  try{
+    const aw=(window.screen&&screen.availWidth)||1280,ah=(window.screen&&screen.availHeight)||800;
+    const ww=Math.min(1280,Math.round(aw*0.88)),wh=Math.min(900,Math.round(ah*0.92));
+    const idx=Object.keys(MODULOS).indexOf(t),off=(idx%6)*28;
+    const left=Math.max(0,Math.round((aw-ww)/2)+off-70),top=Math.max(0,Math.round((ah-wh)/2)+off-40);
+    const feats=`popup=yes,toolbar=no,location=no,menubar=no,status=no,resizable=yes,scrollbars=yes,width=${ww},height=${wh},left=${left},top=${top}`;
+    const w=window.open('./winflex-cobranzas.html?tab='+encodeURIComponent(t),'winflexcobseg_'+t,feats);
+    if(w){try{w.focus();}catch(_){ } return;}
+  }catch(_){}
+  activarInterno(t);
+}
+// Compatibilidad: todas las llamadas a switchTab(...) abren ahora una ventana.
+function switchTab(t){ return abrirModulo(t); }
 function goNCsinVincular(){
   const ncMal=ncSinVincular();
   if(!ncMal.length){renderResumen();return}
