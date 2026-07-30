@@ -506,7 +506,7 @@ body.modo-modulo nav{display:none}
 <div class="overlay" id="ovEfeMov"><div class="modal" style="max-width:470px">
   <header><h2 id="efeMovTit">Nuevo movimiento</h2><button class="x" onclick="closeOverlay('ovEfeMov')">&times;</button></header>
   <div class="body">
-    <div class="field"><label>Cliente *</label><input id="efeCliente" list="efeClientesList" placeholder="Ej: EL MATACO"><datalist id="efeClientesList"></datalist></div>
+    <div class="field"><label>Cliente *</label><input id="efeCliente" list="efeClientesList" placeholder="Ej: EL MATACO" oninput="efeRenderAplic()"><datalist id="efeClientesList"></datalist></div>
     <div class="frow">
       <div class="field"><label>Tipo</label><select id="efeTipo" onchange="efeTipoChange()"><option value="remito">Remito (suma deuda)</option><option value="pago">Pago (cancela)</option></select></div>
       <div class="field"><label>Fecha *</label><input id="efeFecha" type="date"></div>
@@ -518,9 +518,11 @@ body.modo-modulo nav{display:none}
         <option value="Transferencia">Transferencia</option><option value="">Sin especificar</option></select></div>
     </div>
     <div class="frow">
+      <div class="field" id="efeNumWrap"><label>N&ordm; de remito interno</label><input id="efeNumero" placeholder="Ej: 001"></div>
       <div class="field"><label>Referencia</label><input id="efeRef" placeholder="WP10, F40, MARAFLEX&hellip;"></div>
-      <div class="field"><label>Observaci&oacute;n</label><input id="efeNota" placeholder="Opcional"></div>
     </div>
+    <div class="field"><label>Observaci&oacute;n</label><input id="efeNota" placeholder="Opcional"></div>
+    <div id="efeAplicWrap"></div>
     <div class="hint" id="efeMovHint">El importe va siempre en positivo. En un pago, si es un cheque a fecha, poné la fecha en que se cobra: queda marcado como valor a cobrar y no cancela la antigüedad hasta ese día.</div>
   </div>
   <div class="foot"><button class="btn ghost" id="efeDelBtn" onclick="deleteEfeMov()" style="margin-right:auto;color:var(--venc)">Eliminar</button><button class="btn ghost" onclick="closeOverlay('ovEfeMov')">Cancelar</button><button class="btn" onclick="saveEfeMov()">Guardar</button></div>
@@ -1362,7 +1364,7 @@ const EFE_XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full
 const EFE_SEMILLA=[{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-03-02","importe":512000.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-04-15","importe":957000.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-05-19","importe":619500.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-06-25","importe":592000.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-07-28","importe":1020000.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"","fecha":"2026-06-18","importe":-500000.0,"medio":"Efectivo","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"","fecha":"2026-06-18","importe":-856761.31,"medio":"Cheque","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"","fecha":"2026-06-30","importe":-740000.0,"medio":"Cheque","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-06-29","importe":345000.0,"medio":"","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-07-01","importe":124000.0,"medio":"","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-07-06","importe":814000.0,"medio":"","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-07-14","importe":1019000.0,"medio":"","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-07-23","importe":96000.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-03-09","importe":12000.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-04-27","importe":28000.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-05-04","importe":43750.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-05-13","importe":42000.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-05-19","importe":31500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"WP10","fecha":"2026-05-27","importe":617500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"MARAFLEX","fecha":"2026-06-18","importe":1604500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"MARAFLEX","fecha":"2026-07-16","importe":2539500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"WP10","fecha":"2026-07-27","importe":388500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"","fecha":"2026-07-28","importe":-617500.0,"medio":"Efectivo","nota":""},{"cliente":"ESTEROS AZULES","ref":"F40","fecha":"2026-07-03","importe":8610624.0,"medio":"","nota":""},{"cliente":"IGNACIO","ref":"WP","fecha":"2026-07-27","importe":2306000.0,"medio":"","nota":"SE ENTREGA 28/07"},{"cliente":"IGNACIO","ref":"","fecha":"2026-07-28","importe":-2306000.0,"medio":"Efectivo","nota":""},{"cliente":"KIOLLO","ref":"RR","fecha":"2026-07-07","importe":990000.0,"medio":"","nota":""},{"cliente":"KIOLLO","ref":"","fecha":"2026-07-24","importe":1117000.0,"medio":"","nota":""},{"cliente":"KIOLLO","ref":"","fecha":"2026-07-29","importe":-990000.0,"medio":"Efectivo","nota":""},{"cliente":"LEOPOLDO","ref":"","fecha":"2026-07-13","importe":1078000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-15","importe":186450.0,"medio":"","nota":"Saldo"},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-17","importe":537000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-21","importe":447000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-30","importe":273000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-06","importe":447000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-14","importe":273000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-19","importe":325800.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-28","importe":439000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-02","importe":198000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-09","importe":198000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-16","importe":273000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-19","importe":198000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-24","importe":396000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-07-01","importe":396000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-07-10","importe":546000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-07-15","importe":185000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-22","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-28","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-08","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-12","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-19","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-06-02","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-06-03","importe":-1000000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-07-01","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-07-07","importe":-396000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-07-20","importe":-600000.0,"medio":"Efectivo","nota":""},{"cliente":"MAIRE NORMA CUELLAR","ref":"F40","fecha":"2026-06-18","importe":330504.0,"medio":"","nota":""},{"cliente":"MAIRE NORMA CUELLAR","ref":"","fecha":"2026-06-19","importe":-330000.0,"medio":"","nota":""},{"cliente":"MARCELO (LLAMPICO)","ref":"","fecha":"2026-07-23","importe":340000.0,"medio":"","nota":""},{"cliente":"MARCELO (LLAMPICO)","ref":"","fecha":null,"importe":-500000.0,"medio":"Transferencia","nota":""},{"cliente":"MONTI","ref":"LAMINA","fecha":"2026-07-08","importe":437920.0,"medio":"","nota":""},{"cliente":"STURNO","ref":"WP08","fecha":"2026-06-12","importe":97500.0,"medio":"","nota":""},{"cliente":"STURNO","ref":"WP08","fecha":"2026-07-10","importe":195000.0,"medio":"","nota":""},{"cliente":"TASTY FOODS","ref":"WP08","fecha":"2026-07-08","importe":585000.0,"medio":"","nota":""},{"cliente":"TASTY FOODS","ref":"WP08","fecha":"2026-07-16","importe":585000.0,"medio":"","nota":""},{"cliente":"TASTY FOODS","ref":"WP08","fecha":"2026-07-28","importe":684750.0,"medio":"","nota":""},{"cliente":"TASTY FOODS","ref":"","fecha":"2026-09-04","importe":-585000.0,"medio":"Cheque","nota":""},{"cliente":"TASTY FOODS","ref":"","fecha":"2026-09-05","importe":-585000.0,"medio":"Cheque","nota":""},{"cliente":"TASTY FOODS","ref":"","fecha":"2026-09-07","importe":-684750.0,"medio":"Cheque","nota":""},{"cliente":"GUEVINA","ref":"","fecha":"2026-07-28","importe":259500.0,"medio":"","nota":""}];
 let EFE_SEL=null, EFE_EDIT=null, EFE_IMPORT=null, EFE_CACHE=[];
 
-function mapEfectivoIn(m){return {id:m.id||uid(),cliente:(m.cliente||'').toString().trim(),ref:m.ref||'',fecha:(m.fecha||'').slice(0,10)||null,importe:+m.importe||0,medio:m.medio||'',nota:m.nota||'',createdAt:m.createdAt||NOW(),updatedAt:m.updatedAt||NOW()}}
+function mapEfectivoIn(m){return {id:m.id||uid(),cliente:(m.cliente||'').toString().trim(),ref:m.ref||'',numero:(m.numero==null?'':String(m.numero)).trim(),aplic:Array.isArray(m.aplic)?m.aplic.map(a=>({r:a.r,m:Math.round((+a.m||0)*100)/100})).filter(a=>a.r&&a.m>0):[],fecha:(m.fecha||'').slice(0,10)||null,importe:+m.importe||0,medio:m.medio||'',nota:m.nota||'',createdAt:m.createdAt||NOW(),updatedAt:m.updatedAt||NOW()}}
 function efeList(){if(!STATE.efectivo)STATE.efectivo=[];return STATE.efectivo}
 function efeDias(f){if(!f)return 0;return Math.floor((new Date(todayISO()+'T00:00:00')-new Date(f+'T00:00:00'))/864e5)}
 function efeFuturo(m){return m.importe<0 && !!m.fecha && m.fecha>todayISO()}
@@ -1382,17 +1384,23 @@ function efeCalc(){
     const pagos=movs.filter(m=>m.importe<0);
     const cobrados=pagos.filter(m=>!efeFuturo(m));
     const aFecha=pagos.filter(efeFuturo);
+    // 1) lo que se imputó a mano a un remito puntual  2) el resto, al más viejo primero
     let porImputar=cobrados.reduce((s,m)=>s-m.importe,0);
+    const apl={};
+    cobrados.forEach(p=>(p.aplic||[]).forEach(a=>{apl[a.r]=(apl[a.r]||0)+a.m;porImputar-=a.m}));
+    porImputar=Math.max(0,porImputar);
+    const sinAplicar=cobrados.reduce((s,p)=>s+Math.max(0,-p.importe-(p.aplic||[]).reduce((x,a)=>x+a.m,0)),0);
     const abiertos=[];
-    remitos.forEach(r=>{let resto=r.importe;const usa=Math.min(resto,porImputar);porImputar-=usa;resto-=usa;
-      if(resto>0.5)abiertos.push({fecha:r.fecha,monto:resto,dias:efeDias(r.fecha),ref:r.ref})});
+    remitos.forEach(r=>{let resto=Math.max(0,r.importe-(apl[r.id]||0));
+      const usa=Math.min(resto,porImputar);porImputar-=usa;resto-=usa;
+      if(resto>0.5)abiertos.push({id:r.id,numero:r.numero,fecha:r.fecha,monto:resto,dias:efeDias(r.fecha),ref:r.ref,explicito:!!apl[r.id]})});
     const pendiente=remitos.reduce((s,m)=>s+m.importe,0)-cobrados.reduce((s,m)=>s-m.importe,0);
     const valores=aFecha.reduce((s,m)=>s-m.importe,0);
     const agg=[0,0,0,0];
     abiertos.forEach(a=>{agg[EFE_BUCKETS.findIndex(b=>a.dias<=b.max)]+=a.monto});
     const fp=cobrados.map(p=>p.fecha).filter(Boolean).sort();
     const ultPago=fp.length?fp[fp.length-1]:null;
-    return {nombre,movs,remitos,pagos,cobrados,aFecha,valores,pendiente,abiertos,agg,
+    return {nombre,movs,remitos,pagos,cobrados,aFecha,valores,pendiente,abiertos,agg,sinAplicar,
       aFavor:Math.max(0,porImputar),
       diasMax:abiertos.length?Math.max.apply(null,abiertos.map(a=>a.dias)):null,
       ultPago,diasSinPago:ultPago?efeDias(ultPago):null,
@@ -1450,6 +1458,7 @@ function renderEfectivo(){
       const tags=(c.pendiente<-0.5?'<span class="tag-efe g">a favor</span>':'')
         +(c.valores>0?'<span class="tag-efe w">cheques a fecha</span>':'')
         +(Math.abs(c.pendiente)<1?'<span class="tag-efe">saldado</span>':'')
+        +(c.sinAplicar>0.5&&c.remitos.length?'<span class="tag-efe">pagos sin aplicar</span>':'')
         +(c.oficial?'<span class="tag-efe g">en cartera</span>':'');
       return `<tr class="efe-row" onclick="openEfeCli(${i})">
         <td><span class="cli-name">${esc(c.nombre)}</span>${tags}<div class="cli-meta">${c.remitos.length} remitos · ${c.pagos.length} pagos</div></td>
@@ -1472,10 +1481,20 @@ function openEfeCli(i){
   let acum=0;
   const filas=c.movs.map(m=>{acum+=m.importe;
     const fut=efeFuturo(m);
-    const et=m.importe>0?(m.ref||'Remito'):(m.medio||'Pago');
+    const et=m.importe>0?(m.numero?'Remito '+m.numero:(m.ref||'Remito')):(m.medio||'Pago');
+    let extra='';
+    if(m.importe>0&&m.numero&&m.ref)extra=`<span class="tag-efe">${esc(m.ref)}</span>`;
+    if(m.importe<0){
+      const ap=(m.aplic||[]);
+      const nums=ap.map(a=>{const r=efeList().find(x=>x.id===a.r);return r?efeRemitoLabel(r).replace('Remito ','N\u00ba '):''}).filter(Boolean);
+      const usa=ap.reduce((x,a)=>x+a.m,0), resto=Math.round((-m.importe-usa)*100)/100;
+      if(nums.length)extra+=`<span class="tag-efe g">${esc(nums.join(', '))}</span>`;
+      if(resto>0.5&&nums.length)extra+=`<span class="tag-efe">a cuenta ${fmt(resto)}</span>`;
+      else if(!nums.length)extra+='<span class="tag-efe">sin aplicar</span>';
+    }
     return `<tr onclick="openEfeMov('${m.id}')" style="cursor:pointer">
       <td>${m.fecha?dShow(m.fecha):'s/f'}</td>
-      <td>${esc(et)}${fut?'<span class="tag-efe w">a fecha</span>':''}${m.nota?`<span class="tag-efe">${esc(m.nota)}</span>`:''}</td>
+      <td>${esc(et)}${fut?'<span class="tag-efe w">a fecha</span>':''}${extra}${m.nota?`<span class="tag-efe">${esc(m.nota)}</span>`:''}</td>
       <td class="r num"${m.importe<0?' style="color:var(--cobr)"':''}>${fmt(m.importe)}</td>
       <td class="r num">${fmt(acum)}</td></tr>`}).join('');
   const ofi=c.oficial?`<div class="efe-alert ok" style="margin-bottom:14px">En cartera oficial como <b>${esc(c.oficial.razonSocial)}</b> · saldo facturado ${fmt(saldoCliente(c.oficial.id))} · <b>total combinado ${fmt(saldoCliente(c.oficial.id)+Math.max(0,c.pendiente))}</b></div>`
@@ -1488,7 +1507,9 @@ function openEfeCli(i){
       ${c.valores?`<span class="efe-chip">Cheques a fecha <strong class="num">${fmt(c.valores)}</strong></span>`:''}
     </div>
     <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th class="r">Importe</th><th class="r">Saldo</th></tr></thead><tbody>${filas}</tbody></table></div>
-    ${c.abiertos.length?`<div class="hint"><b>Sin cobrar (FIFO):</b> ${c.abiertos.map(a=>dShow(a.fecha)+' · '+fmt(a.monto)+' · '+a.dias+' d').join(' — ')}</div>`:'<div class="hint">Sin saldo pendiente de cobro.</div>'}
+    ${c.abiertos.length?`<div class="hint"><b>Sin cobrar:</b> ${c.abiertos.map(a=>(a.numero?'N\u00ba '+a.numero+' · ':'')+dShow(a.fecha)+' · '+fmt(a.monto)+' · '+a.dias+' d').join(' — ')}</div>`:'<div class="hint">Sin saldo pendiente de cobro.</div>'}
+    ${c.sinAplicar>0.5&&c.remitos.length?`<div class="efe-alert" style="margin-top:12px">Hay <b>${fmt(c.sinAplicar)}</b> en pagos que todav\u00eda no est\u00e1n aplicados a ning\u00fan remito. Se descuentan igual del saldo, pero si los aplic\u00e1s queda registrado qu\u00e9 pag\u00f3 cada uno.
+      <div style="margin-top:8px"><button class="btn sm" onclick="efeImputarAuto(${JSON.stringify(c.nombre).replace(/"/g,'&quot;')})">Aplicar autom\u00e1tico, del m\u00e1s viejo al m\u00e1s nuevo</button></div></div>`:''}
     <div class="hint">Tocá cualquier línea para editarla.</div>
     <div class="card" style="padding:14px;margin-top:14px;background:var(--surface2)"><h3>Vínculo con la cartera oficial</h3>
       <div class="field">${efeLinkSelect(c.nombre)}</div>
@@ -1499,7 +1520,10 @@ function openEfeCli(i){
 }
 
 /* ---------- alta / edición ---------- */
-function efeTipoChange(){$('efeMedioWrap').style.display=$('efeTipo').value==='pago'?'':'none'}
+function efeTipoChange(){const esPago=$('efeTipo').value==='pago';
+  $('efeMedioWrap').style.display=esPago?'':'none';
+  $('efeNumWrap').style.display=esPago?'none':'';
+  efeRenderAplic()}
 function openEfeMov(id,cliente){
   if(!id)EFE_MOV_LINK=null;
   EFE_EDIT=id?efeList().find(m=>m.id===id):null;
@@ -1511,6 +1535,7 @@ function openEfeMov(id,cliente){
   $('efeImporte').value=m?Math.abs(m.importe):'';
   $('efeMedio').value=m?(m.medio||''):'Efectivo';
   $('efeRef').value=m?m.ref:'';
+  $('efeNumero').value=m?(m.numero||''):efeProxNumero();
   $('efeNota').value=m?m.nota:'';
   $('efeDelBtn').style.display=m?'':'none';
   efeTipoChange();
@@ -1527,7 +1552,13 @@ function saveEfeMov(){
   const conocido = efeList().some(m=>m.cliente===cli) || STATE.clientes.some(c=>c.razonSocial===cli);
   if(!conocido && !EFE_MOV_LINK && !confirm('"'+cli+'" no figura entre los clientes. Se va a abrir una cuenta de efectivo nueva con ese nombre.\n\nSi es un cliente que ya existe, cancelá y elegilo de la lista para no duplicarlo.\n\n¿Crear la cuenta nueva?'))return;
   const esPago=$('efeTipo').value==='pago';
-  const datos={cliente:cli,fecha,importe:esPago?-imp:imp,medio:esPago?$('efeMedio').value:'',ref:$('efeRef').value.trim(),nota:$('efeNota').value.trim(),updatedAt:NOW()};
+  let aplic=[];
+  if(esPago){
+    aplic=efeAplicInputs().map(i=>({r:i.id.slice(4),m:Math.round((+i.value||0)*100)/100})).filter(a=>a.m>0);
+    const usa=aplic.reduce((s,a)=>s+a.m,0);
+    if(usa>imp+0.5){toast('Estás aplicando más de lo que dice el importe del pago','bad');return}
+  }
+  const datos={cliente:cli,fecha,importe:esPago?-imp:imp,medio:esPago?$('efeMedio').value:'',numero:esPago?'':$('efeNumero').value.trim(),aplic,ref:$('efeRef').value.trim(),nota:$('efeNota').value.trim(),updatedAt:NOW()};
   if(EFE_EDIT)Object.assign(EFE_EDIT,datos);
   else efeList().push(mapEfectivoIn({...datos,createdAt:NOW()}));
   if(EFE_MOV_LINK){efeLinks()[cli]=EFE_MOV_LINK;EFE_MOV_LINK=null}
@@ -1822,6 +1853,99 @@ function movDesdeCuenta(nombreCuenta,cliId){
   closeOverlay('ovCuenta');
   openEfeMov(null,nombreCuenta);
   if(cliId)EFE_MOV_LINK=cliId;
+}
+
+
+/* ---------- números de remito e imputación de pagos ---------- */
+function efeProxNumero(){
+  const n=efeList().filter(m=>m.importe>0).map(m=>parseInt(String(m.numero).replace(/\D/g,''),10))
+    .filter(x=>!isNaN(x));
+  return n.length?String(Math.max.apply(null,n)+1):'1';
+}
+function efeRemitoLabel(r){return r.numero?('Remito '+r.numero):(r.ref||'Remito')}
+/* cuánto de ese remito ya está imputado por OTROS pagos */
+function efeAplicadoPorOtros(remId,pagoId){
+  return efeList().filter(m=>m.importe<0&&m.id!==pagoId)
+    .reduce((s,p)=>s+(p.aplic||[]).filter(a=>a.r===remId).reduce((x,a)=>x+a.m,0),0);
+}
+function efeRenderAplic(){
+  const w=$('efeAplicWrap'); if(!w)return;
+  if($('efeTipo').value!=='pago'){w.innerHTML='';return}
+  const cli=$('efeCliente').value.trim();
+  const rem=efeList().filter(m=>m.cliente===cli&&m.importe>0)
+    .sort((a,b)=>(a.fecha||'0000')<(b.fecha||'0000')?-1:1);
+  if(!rem.length){w.innerHTML='<div class="hint">Este cliente todavía no tiene remitos cargados: el pago va a quedar a cuenta.</div>';return}
+  const yo=EFE_EDIT?EFE_EDIT.id:null;
+  const filas=rem.map(r=>{
+    const otros=efeAplicadoPorOtros(r.id,yo);
+    const disp=Math.max(0,r.importe-otros);
+    const mio=EFE_EDIT?((EFE_EDIT.aplic||[]).filter(a=>a.r===r.id).reduce((x,a)=>x+a.m,0)):0;
+    return `<tr${disp<0.5&&mio<0.5?' style="opacity:.45"':''}>
+      <td>${esc(efeRemitoLabel(r))}<div class="cli-meta">${r.fecha?dShow(r.fecha):'s/f'}</div></td>
+      <td class="r num">${fmt(r.importe)}</td>
+      <td class="r num">${fmt(disp)}</td>
+      <td class="r"><input type="number" step="0.01" min="0" id="apl_${r.id}" value="${mio||''}" placeholder="0"
+        oninput="efeAplicTotal()" style="width:105px;text-align:right;padding:6px 8px;border:1px solid var(--border);border-radius:8px"></td></tr>`}).join('');
+  w.innerHTML=`<div class="card" style="padding:13px;margin-top:6px;background:var(--surface2)">
+    <h3 style="margin-bottom:9px">Aplicar el pago a un remito</h3>
+    <div class="tablewrap"><table><thead><tr><th>Remito</th><th class="r">Importe</th><th class="r">Sin cobrar</th><th class="r">Aplicar</th></tr></thead><tbody>${filas}</tbody></table></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+      <button class="btn ghost sm" onclick="efeAplicFIFO()">Aplicar al m&aacute;s viejo</button>
+      <button class="btn ghost sm" onclick="efeAplicLimpiar()">Limpiar</button>
+      <span class="hint" id="efeAplicResto" style="margin:0;margin-left:auto"></span>
+    </div>
+    <div class="hint">Si no aplic&aacute;s nada, el pago se descuenta igual del saldo del cliente, empezando por el remito m&aacute;s viejo.</div>
+  </div>`;
+  efeAplicTotal();
+}
+function efeAplicInputs(){return [...document.querySelectorAll('#efeAplicWrap input[id^=apl_]')]}
+function efeAplicTotal(){
+  const imp=Math.abs(+$('efeImporte').value||0);
+  const usa=efeAplicInputs().reduce((s,i)=>s+(+i.value||0),0);
+  const el=$('efeAplicResto'); if(!el)return usa;
+  const resto=Math.round((imp-usa)*100)/100;
+  el.innerHTML = usa>imp+0.5
+    ? `<b style="color:var(--venc)">Estás aplicando ${fmt(usa)} y el pago es de ${fmt(imp)}</b>`
+    : (resto>0.5?`Queda a cuenta: <b>${fmt(resto)}</b>`:'<b style="color:var(--cobr)">Pago aplicado por completo</b>');
+  return usa;
+}
+function efeAplicFIFO(){
+  let disp=Math.abs(+$('efeImporte').value||0);
+  if(!disp){toast('Poné primero el importe del pago','bad');return}
+  const yo=EFE_EDIT?EFE_EDIT.id:null;
+  efeAplicInputs().forEach(i=>{
+    const r=efeList().find(m=>m.id===i.id.slice(4));
+    const libre=Math.max(0,r.importe-efeAplicadoPorOtros(r.id,yo));
+    const usa=Math.min(disp,libre); disp-=usa;
+    i.value=usa>0.005?Math.round(usa*100)/100:'';
+  });
+  efeAplicTotal();
+}
+function efeAplicLimpiar(){efeAplicInputs().forEach(i=>i.value='');efeAplicTotal()}
+
+/* Convierte la imputación automática en imputación explícita, para los pagos ya cargados. */
+function efeImputarAuto(nombre){
+  const movs=efeList().filter(m=>m.cliente===nombre);
+  const rem=movs.filter(m=>m.importe>0).sort((a,b)=>(a.fecha||'0000')<(b.fecha||'0000')?-1:1);
+  const pag=movs.filter(m=>m.importe<0).sort((a,b)=>(a.fecha||'0000')<(b.fecha||'0000')?-1:1);
+  if(!rem.length||!pag.length){toast('No hay remitos y pagos para cruzar','bad');return}
+  if(!confirm('Se van a aplicar los '+pag.length+' pagos de '+nombre+' a sus remitos, del más viejo al más nuevo.\n\nLo que ya hayas imputado a mano se rehace. ¿Seguir?'))return;
+  const saldos=rem.map(r=>({id:r.id,resto:r.importe}));
+  pag.forEach(p=>{
+    p.aplic=[];
+    let disp=-p.importe;
+    for(const sd of saldos){
+      if(disp<=0.5)break;
+      if(sd.resto<=0.5)continue;
+      const m=Math.min(disp,sd.resto);
+      p.aplic.push({r:sd.id,m:Math.round(m*100)/100});
+      sd.resto-=m; disp-=m;
+    }
+    p.updatedAt=NOW();
+  });
+  saveToCloud();renderEfectivo();renderTotal();
+  if(EFE_SEL===nombre){const i=EFE_CACHE.findIndex(c=>c.nombre===nombre);if(i>=0){EFE_CACHE=efeCalc();openEfeCli(EFE_CACHE.findIndex(c=>c.nombre===nombre))}}
+  toast('Pagos imputados','ok');
 }
 
 (function init(){const u=localStorage.getItem(LS.user);if(u&&Object.values(PINS).includes(u)){CURRENT_USER=u;startApp()}else $('pinInput').focus()})();
