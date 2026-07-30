@@ -362,6 +362,7 @@ body.modo-modulo nav{display:none}
       </select>
       <button class="btn sm" onclick="openEfeMov()">+ Movimiento</button>
       <label class="btn ghost sm" style="display:inline-flex;align-items:center;gap:4px"><input type="file" accept=".xlsx,.xls" hidden onchange="onEfeExcel(event)">&uarr; Importar Excel</label>
+      <button class="btn sm" onclick="exportEfeExcel()">&#128202; Informe</button>
       <button class="btn ghost sm" onclick="exportEfeJSON()">&darr; Respaldo</button>
     </div>
     <div id="efePreview"></div>
@@ -1946,6 +1947,153 @@ function efeImputarAuto(nombre){
   saveToCloud();renderEfectivo();renderTotal();
   if(EFE_SEL===nombre){const i=EFE_CACHE.findIndex(c=>c.nombre===nombre);if(i>=0){EFE_CACHE=efeCalc();openEfeCli(EFE_CACHE.findIndex(c=>c.nombre===nombre))}}
   toast('Pagos imputados','ok');
+}
+
+
+/* ---------- informe Excel de efectivo ---------- */
+async function exportEfeExcel(){
+  try{
+    toast('Generando informe…');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js');
+    const VERDE='FF1B7A44', GRIS='FF5C6677', ROJO='FFD83A3A', BORDE='FFD9DEE7';
+    const money='"$"#,##0';
+    const thin={style:'thin',color:{argb:BORDE}};
+    const box={top:thin,left:thin,bottom:thin,right:thin};
+    const hdrFill={type:'pattern',pattern:'solid',fgColor:{argb:VERDE}};
+    const hdrFont={bold:true,color:{argb:'FFFFFFFF'},size:11,name:'Calibri'};
+    const wb=new ExcelJS.Workbook();
+    wb.creator='Winflex S.A.';wb.created=new Date();
+
+    const C=efeCalc();
+    const total=C.reduce((s,c)=>s+Math.max(0,c.pendiente),0);
+    const valores=C.reduce((s,c)=>s+c.valores,0);
+    const agg=[0,0,0,0];C.forEach(c=>c.agg.forEach((v,i)=>agg[i]+=v));
+
+    /* mapa remito -> saldo pendiente, y quién lo pagó */
+    const saldoRem={}, pagoDe={};
+    C.forEach(c=>{
+      c.abiertos.forEach(a=>saldoRem[a.id]=a.monto);
+      c.pagos.forEach(p=>(p.aplic||[]).forEach(a=>{
+        (pagoDe[a.r]=pagoDe[a.r]||[]).push((p.fecha?dShow(p.fecha):'s/f')+' '+(p.medio||'pago')+' '+fmt(a.m));
+      }));
+    });
+    const remPorId={};efeList().filter(m=>m.importe>0).forEach(r=>remPorId[r.id]=r);
+
+    function hoja(nombre,cols){
+      const w=wb.addWorksheet(nombre,{views:[{state:'frozen',ySplit:1,showGridLines:false}]});
+      w.columns=cols.map(c=>({width:c[1]}));
+      cols.forEach((c,i)=>{const cell=w.getCell(1,i+1);cell.value=c[0];cell.fill=hdrFill;cell.font=hdrFont;cell.border=box;
+        cell.alignment={horizontal:c[2]==='r'?'right':'left',vertical:'middle'}});
+      w.getRow(1).height=20;
+      w.autoFilter={from:{row:1,column:1},to:{row:1,column:cols.length}};
+      return w;
+    }
+    function fila(w,ri,vals,cols){
+      vals.forEach((v,i)=>{const cell=w.getCell(ri,i+1);cell.value=v;cell.border=box;cell.font={size:10};
+        if(cols[i][2]==='r'){cell.alignment={horizontal:'right'};if(typeof v==='number')cell.numFmt=money}});
+      if(ri%2===0)vals.forEach((v,i)=>{const cell=w.getCell(ri,i+1);
+        if(!cell.fill||!cell.fill.fgColor)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF7F9FB'}}});
+    }
+
+    /* ====== RESUMEN ====== */
+    const ws=wb.addWorksheet('Resumen',{views:[{showGridLines:false}]});
+    ws.columns=[{width:3},{width:30},{width:16},{width:16},{width:16},{width:16},{width:4}];
+    try{const logoId=wb.addImage({base64:'data:image/png;base64,'+LOGO_B64,extension:'png'});
+      ws.addImage(logoId,{tl:{col:1,row:0},ext:{width:176,height:100}});}catch(e){}
+    ws.mergeCells('D2:F2');const t1=ws.getCell('D2');t1.value='EFECTIVO · REMITOS INTERNOS';t1.font={bold:true,size:16,color:{argb:VERDE}};t1.alignment={horizontal:'right',vertical:'middle'};
+    ws.mergeCells('D3:F3');const t2=ws.getCell('D3');t2.value='Winflex S.A. · Envases Especiales';t2.font={size:11,color:{argb:GRIS}};t2.alignment={horizontal:'right'};
+    ws.mergeCells('D4:F4');const t3=ws.getCell('D4');t3.value='Generado el '+dShow(todayISO())+(CURRENT_USER?' · '+CURRENT_USER:'');t3.font={size:10,italic:true,color:{argb:GRIS}};t3.alignment={horizontal:'right'};
+
+    let r=7;
+    function titulo(row,text){ws.mergeCells(`B${row}:F${row}`);const c=ws.getCell(`B${row}`);c.value=text;c.font={bold:true,size:12,color:{argb:VERDE}};c.border={bottom:{style:'medium',color:{argb:VERDE}}}}
+    titulo(r,'Situación general');r+=2;
+    [['Pendiente de cobro',total],['Cubierto con cheques a fecha',valores],['Sin cobertura',total-valores],
+     ['Vencido +60 días',agg[2]+agg[3]]].forEach((k,i)=>{
+      const row=r+i;const lc=ws.getCell(`B${row}`);lc.value=k[0];lc.font={color:{argb:GRIS},size:11};
+      const vc=ws.getCell(`C${row}`);vc.value=k[1];vc.numFmt=money;vc.alignment={horizontal:'right'};
+      vc.font={bold:true,size:11,color:{argb:k[0]==='Vencido +60 días'?ROJO:'FF1B2233'}}});
+    r+=6;
+    titulo(r,'Antigüedad de saldos');r+=2;
+    ['0 a 30 días','31 a 60 días','61 a 90 días','Más de 90 días'].forEach((k,i)=>{
+      const row=r+i;ws.getCell(`B${row}`).value=k;ws.getCell(`B${row}`).font={color:{argb:GRIS},size:11};
+      const vc=ws.getCell(`C${row}`);vc.value=agg[i];vc.numFmt=money;vc.alignment={horizontal:'right'};vc.font={bold:true,size:11}});
+    r+=6;
+    titulo(r,'Saldo por cliente');r+=2;
+    [['Cliente','l'],['Pendiente','r'],['Cheques a fecha','r'],['Días más viejo','r'],['Último pago','r']]
+      .forEach((h,i)=>{const cell=ws.getCell(r,i+2);cell.value=h[0];cell.fill=hdrFill;cell.font=hdrFont;cell.border=box;
+        cell.alignment={horizontal:h[1]==='r'?'right':'left'}});
+    r++;
+    C.slice().sort((a,b)=>b.pendiente-a.pendiente).forEach((c,i)=>{
+      const row=r+i;
+      const vals=[c.nombre,c.pendiente,c.valores,c.diasMax!=null?c.diasMax:'',c.ultPago?dShow(c.ultPago):'nunca'];
+      vals.forEach((v,j)=>{const cell=ws.getCell(row,j+2);cell.value=v;cell.border=box;cell.font={size:10};
+        if(j===1||j===2){cell.numFmt=money;cell.alignment={horizontal:'right'}}
+        if(j>=3)cell.alignment={horizontal:'right'}})});
+
+    /* ====== REMITOS ====== */
+    const colsR=[['Cliente',30,'l'],['Nº',10,'l'],['Fecha',12,'l'],['Ref.',12,'l'],['Importe',14,'r'],
+                 ['Cobrado',14,'r'],['Saldo',14,'r'],['Días',9,'r'],['Estado',12,'l'],['Cancelado por',42,'l'],['Observación',30,'l']];
+    const wr=hoja('Remitos',colsR);
+    let ri=2;
+    C.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre)).forEach(c=>{
+      c.remitos.slice().sort((a,b)=>(a.fecha||'')<(b.fecha||'')?-1:1).forEach(rm=>{
+        const saldo=saldoRem[rm.id]||0, cob=rm.importe-saldo;
+        const est=saldo<0.5?'Cobrado':(cob>0.5?'Parcial':'Pendiente');
+        fila(wr,ri,[c.nombre,rm.numero||'',rm.fecha?dShow(rm.fecha):'',rm.ref||'',rm.importe,cob,saldo,
+          saldo>0.5?efeDias(rm.fecha):'',est,(pagoDe[rm.id]||[]).join(' · '),rm.nota||''],colsR);
+        if(saldo>0.5&&efeDias(rm.fecha)>60){const cell=wr.getCell(ri,8);cell.font={size:10,bold:true,color:{argb:ROJO}}}
+        ri++})});
+
+    /* ====== PAGOS ====== */
+    const colsP=[['Cliente',30,'l'],['Fecha',12,'l'],['Medio',15,'l'],['Importe',14,'r'],
+                 ['Aplicado a',34,'l'],['A cuenta',14,'r'],['Situación',14,'l'],['Observación',30,'l']];
+    const wp=hoja('Pagos',colsP);
+    let pi=2;
+    C.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre)).forEach(c=>{
+      c.pagos.slice().sort((a,b)=>(a.fecha||'')<(b.fecha||'')?-1:1).forEach(p=>{
+        const ap=(p.aplic||[]), usa=ap.reduce((x,a)=>x+a.m,0);
+        const destino=ap.map(a=>{const rm=remPorId[a.r];return rm?((rm.numero?'Nº '+rm.numero:'remito')+' del '+(rm.fecha?dShow(rm.fecha):'s/f')+' · '+fmt(a.m)):''}).filter(Boolean).join(' · ');
+        fila(wp,pi,[c.nombre,p.fecha?dShow(p.fecha):'s/f',p.medio||'Sin especificar',-p.importe,
+          destino,Math.max(0,-p.importe-usa),efeFuturo(p)?'Cheque a fecha':'Cobrado',p.nota||''],colsP);
+        pi++})});
+
+    /* ====== MOVIMIENTOS (historial) ====== */
+    const colsM=[['Cliente',30,'l'],['Fecha',12,'l'],['Concepto',26,'l'],['Debe',14,'r'],['Haber',14,'r'],['Saldo',14,'r'],['Observación',30,'l']];
+    const wm=hoja('Movimientos',colsM);
+    let mi=2;
+    C.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre)).forEach(c=>{
+      let acum=0;
+      c.movs.forEach(m=>{
+        acum+=m.importe;
+        const con=m.importe>0?(m.numero?'Remito Nº '+m.numero:(m.ref||'Remito')):((m.medio||'Pago')+(efeFuturo(m)?' a fecha':''));
+        fila(wm,mi,[c.nombre,m.fecha?dShow(m.fecha):'s/f',con,m.importe>0?m.importe:'',m.importe<0?-m.importe:'',acum,m.nota||''],colsM);
+        mi++});
+      const cell=wm.getCell(mi,3);cell.value='Saldo '+c.nombre;cell.font={bold:true,size:10,color:{argb:VERDE}};
+      const cs=wm.getCell(mi,6);cs.value=c.pendiente;cs.numFmt=money;cs.alignment={horizontal:'right'};
+      cs.font={bold:true,color:{argb:VERDE}};cs.border={top:{style:'double',color:{argb:VERDE}}};
+      mi+=2});
+
+    /* ====== CUENTA TOTAL ====== */
+    const filasT=totCalc(true);
+    if(filasT.length){
+      const colsT=[['Cliente',32,'l'],['Cobranza oficial',16,'r'],['Vencido oficial',16,'r'],
+                   ['Efectivo',16,'r'],['Cheques a fecha',16,'r'],['Total',16,'r']];
+      const wt=hoja('Cuenta total',colsT);
+      let ti=2;
+      filasT.slice().sort((a,b)=>b.total-a.total).forEach(f=>{
+        fila(wt,ti,[f.nombre,f.oficial,f.vencido,f.efectivo,f.valores,f.total],colsT);ti++});
+      const tot=[1,2,3,4,5].map(i=>filasT.reduce((s,f)=>s+[0,f.oficial,f.vencido,f.efectivo,f.valores,f.total][i],0));
+      wt.getCell(ti,1).value='TOTAL';wt.getCell(ti,1).font={bold:true};
+      tot.forEach((v,i)=>{const cell=wt.getCell(ti,i+2);cell.value=v;cell.numFmt=money;cell.alignment={horizontal:'right'};
+        cell.font={bold:true,color:{argb:VERDE}};cell.border={top:{style:'double',color:{argb:VERDE}}}});
+    }
+
+    const buf=await wb.xlsx.writeBuffer();
+    const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download='Informe-Efectivo-Winflex-'+todayISO()+'.xlsx';a.click();
+    toast('Informe descargado','ok');
+  }catch(e){toast('Error al generar el informe: '+e.message,'bad')}
 }
 
 (function init(){const u=localStorage.getItem(LS.user);if(u&&Object.values(PINS).includes(u)){CURRENT_USER=u;startApp()}else $('pinInput').focus()})();
