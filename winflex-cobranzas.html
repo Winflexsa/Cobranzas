@@ -280,6 +280,7 @@ body.modo-modulo nav{display:none}
     <button data-tab="facturas" onclick="switchTab('facturas')">Facturas</button>
     <button data-tab="clientes" onclick="switchTab('clientes')">Clientes</button>
     <button data-tab="efectivo" id="navEfectivo" onclick="switchTab('efectivo')">Efectivo</button>
+    <button data-tab="total" id="navTotal" onclick="switchTab('total')">Cuenta total</button>
     <button data-tab="importar" onclick="switchTab('importar')">Importar</button>
     <button data-tab="config" onclick="switchTab('config')">Config</button>
   </nav>
@@ -368,6 +369,28 @@ body.modo-modulo nav{display:none}
       <thead><tr><th>Cliente</th><th class="r">Pendiente</th><th class="r">%</th><th class="r">D&iacute;as m&aacute;x.</th><th class="r">&Uacute;lt. pago</th><th>Antig&uuml;edad</th></tr></thead>
       <tbody id="efeBody"></tbody></table></div>
     <div class="hint">Tocá un cliente para ver sus remitos y pagos. Los cheques con fecha futura no cancelan la antigüedad: figuran aparte como cubierto con valores.</div>
+  </section>
+
+  <!-- CUENTA TOTAL (oficial + efectivo) -->
+  <section class="tab" id="tab-total">
+    <div class="kpis" id="totKpis"></div>
+    <div class="toolbar">
+      <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+        <input id="totSearch" placeholder="Buscar cliente&hellip;" oninput="renderTotal()"></div>
+      <select class="filter" id="totOrden" onchange="renderTotal()">
+        <option value="total">Ordenar por total</option>
+        <option value="oficial">Por saldo oficial</option>
+        <option value="efectivo">Por efectivo</option>
+        <option value="vencido">Por vencido</option>
+        <option value="nombre">Por nombre</option>
+      </select>
+      <label class="efe-chip" style="gap:7px;cursor:pointer"><input type="checkbox" id="totSoloMixtos" onchange="renderTotal()"> Solo los que est&aacute;n en las dos cuentas</label>
+      <button class="btn ghost sm" onclick="crearClientesFaltantes()">+ Dar de alta los que faltan</button>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Cliente</th><th class="r">Oficial</th><th class="r">Vencido</th><th class="r">Efectivo</th><th class="r">Total</th></tr></thead>
+      <tbody id="totBody"></tbody></table></div>
+    <div class="hint">Tocá un cliente para ver la cuenta completa: los comprobantes de la cobranza oficial y los movimientos de efectivo, uno abajo del otro.</div>
   </section>
 
   <section class="tab" id="tab-importar">
@@ -460,6 +483,13 @@ body.modo-modulo nav{display:none}
 </div></div>
 
 <!-- MODAL COBRO -->
+<!-- MODAL CUENTA TOTAL -->
+<div class="overlay" id="ovCuenta"><div class="modal" style="max-width:760px">
+  <header><h2 id="cuentaTit">Cuenta</h2><button class="x" onclick="closeOverlay('ovCuenta')">&times;</button></header>
+  <div class="body" id="cuentaBody"></div>
+  <div class="foot"><span id="cuentaFoot" style="margin-right:auto"></span><button class="btn ghost" onclick="closeOverlay('ovCuenta')">Cerrar</button></div>
+</div></div>
+
 <!-- MODAL DETALLE EFECTIVO -->
 <div class="overlay" id="ovEfeCli"><div class="modal" style="max-width:660px">
   <header><h2 id="efeCliTit">Cliente</h2><button class="x" onclick="closeOverlay('ovEfeCli')">&times;</button></header>
@@ -530,7 +560,7 @@ const PINS={'1540':'Matías','0104':'Mirta','2727':'Enrique','0204':'Georgina'};
 const CUIT_WINFLEX='30-61048777';
 const LS={bin:'wfc_bin',key:'wfc_key',user:'wfc_user',data:'wfc_data'};
 
-let STATE={clientes:[],comprobantes:[],efectivo:[],meta:{version:1}};
+let STATE={clientes:[],comprobantes:[],efectivo:[],efeLinks:{},meta:{version:1}};
 let CURRENT_USER=null, editingCli=null, editingFac=null, cobroTarget=null, seguimientoTarget=null;
 let saving=false, savePending=false, pdfPending=[];
 let LOAD_OK=false; // true solo si loadFromCloud leyó bien la nube (o modo local); bloquea saveToCloud si la carga falló
@@ -637,7 +667,7 @@ $('pinInput').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()});
 function logout(){localStorage.removeItem(LS.user);location.reload()}
 function startApp(){
   $('login').style.display='none';$('app').style.display='block';$('whoLabel').textContent=CURRENT_USER;
-  { const nb=$('navEfectivo'); if(nb) nb.style.display = puedeEfectivo() ? '' : 'none'; }
+  { const ok=puedeEfectivo();['navEfectivo','navTotal'].forEach(id=>{const nb=$(id);if(nb)nb.style.display=ok?'':'none'}); }
   fillVendSelects();
   $('cfgBin').value=localStorage.getItem(LS.bin)||'';$('cfgKey').value=localStorage.getItem(LS.key)||'';
   loadLocal();
@@ -654,7 +684,7 @@ function fillVendSelects(){const o=VENDEDORES.map(v=>`<option>${v}</option>`).jo
 /* ---------- PERSISTENCIA ---------- */
 function loadLocal(){try{const d=JSON.parse(localStorage.getItem(LS.data));if(d&&d.clientes)STATE=normalizeState(d)}catch(e){}}
 function saveLocal(){localStorage.setItem(LS.data,JSON.stringify(STATE))}
-function normalizeState(d){d.clientes=(d.clientes||[]).map(mapClienteIn);d.comprobantes=(d.comprobantes||d.facturas||[]).map(mapFacturaIn);d.efectivo=(d.efectivo||[]).map(mapEfectivoIn);d.meta=d.meta||{version:1};return d}
+function normalizeState(d){d.clientes=(d.clientes||[]).map(mapClienteIn);d.comprobantes=(d.comprobantes||d.facturas||[]).map(mapFacturaIn);d.efectivo=(d.efectivo||[]).map(mapEfectivoIn);d.efeLinks=d.efeLinks||{};d.meta=d.meta||{version:1};return d}
 function setCloud(s,t){$('cloudStatus').className='cloud '+(s==='ok'?'ok':s==='busy'?'busy':s==='bad'?'bad':'');$('cloudText').textContent=t}
 function binURL(){return 'https://api.jsonbin.io/v3/b/'+localStorage.getItem(LS.bin)}
 function binHeaders(){return {'Content-Type':'application/json','X-Master-Key':localStorage.getItem(LS.key),'X-Bin-Meta':'false'}}
@@ -696,21 +726,21 @@ function refreshNow(){loadFromCloud(true)}
 
 /* ---------- NAV ---------- */
 // ── NAVEGACIÓN POR VENTANAS (mismo sistema que Sueldos/Horas) ──────
-const MODULOS={resumen:'📊 Cobranza',facturas:'📄 Facturas',clientes:'👥 Clientes',efectivo:'💵 Efectivo',importar:'⬆ Importar',config:'⚙️ Config'};
+const MODULOS={resumen:'📊 Cobranza',facturas:'📄 Facturas',clientes:'👥 Clientes',efectivo:'💵 Efectivo',total:'🧾 Cuenta total',importar:'⬆ Importar',config:'⚙️ Config'};
 const _paramTab=(function(){try{return new URLSearchParams(location.search).get('tab');}catch(_){return null;}})();
 const MODULO_VENTANA=(_paramTab&&MODULOS[_paramTab])?_paramTab:null;
 const ES_HIJA=!!MODULO_VENTANA;
 function activarInterno(t){
   if(!MODULOS[t])return;
-  if(t==='efectivo'&&!puedeEfectivo()){toast('No tenés acceso al módulo Efectivo','bad');t='resumen'}
+  if((t==='efectivo'||t==='total')&&!puedeEfectivo()){toast('No tenés acceso a ese módulo','bad');t='resumen'}
   if(document.body.classList.contains('modo-modulo')&&t!==MODULO_VENTANA){document.body.classList.remove('modo-modulo');}
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
   document.querySelectorAll('.tab').forEach(s=>s.classList.toggle('active',s.id==='tab-'+t));
-  if(t==='resumen')renderResumen();if(t==='facturas')renderFacturas();if(t==='clientes')renderClientes();if(t==='efectivo')renderEfectivo();if(t==='config')renderStats();
+  if(t==='resumen')renderResumen();if(t==='facturas')renderFacturas();if(t==='clientes')renderClientes();if(t==='efectivo')renderEfectivo();if(t==='total')renderTotal();if(t==='config')renderStats();
 }
 function abrirModulo(t){
   if(!MODULOS[t])return;
-  if(t==='efectivo'&&!puedeEfectivo()){toast('No tenés acceso al módulo Efectivo','bad');return}
+  if((t==='efectivo'||t==='total')&&!puedeEfectivo()){toast('No tenés acceso a ese módulo','bad');return}
   if(ES_HIJA&&t===MODULO_VENTANA)return;
   try{
     const aw=(window.screen&&screen.availWidth)||1280,ah=(window.screen&&screen.availHeight)||800;
@@ -732,7 +762,7 @@ function goNCsinVincular(){
   openFactura(ncMal[0].id);
   toast(`${ncMal.length} NC sin vincular — corregí la Fc asociada`,'bad');
 }
-function renderAll(){renderResumen();renderFacturas();renderClientes();renderStats();renderCliList();if(puedeEfectivo())renderEfectivo()}
+function renderAll(){renderResumen();renderFacturas();renderClientes();renderStats();renderCliList();if(puedeEfectivo()){renderEfectivo();renderTotal()}}
 
 /* ---------- RESUMEN ---------- */
 function renderResumen(){
@@ -971,6 +1001,7 @@ function renderClientes(){
     return `<tr onclick="openCliente('${c.id}')" style="cursor:pointer"><td><div class="cli-name">${esc(c.razonSocial)}${(function(){var s=cliSituacion(c);return s?` <span class="badge ${s==='juicio'?'b-jui':'b-mor'}">${SITU[s].ico} ${SITU[s].l}</span>`:''})()}</div><div class="cli-meta">${esc(c.codigo||'')}${c.cuit?' · '+esc(c.cuit):''}</div></td><td class="hide"><span class="vend">${esc(c.vendedor||'—')}</span></td><td class="hide num">${condTxt}</td><td>${contactStr}</td><td class="r num" style="font-weight:700">${salTxt}</td><td><div class="row-acts"><button class="mini" onclick="event.stopPropagation();openCliente('${c.id}')">✎</button></div></td></tr>`}).join(''):'<tr><td colspan="6" class="empty">No hay clientes. Importá el respaldo en Importar o agregá uno.</td></tr>';
 }
 function openCliente(id){
+  EFE_LINK_PENDIENTE=null;
   editingCli=id?STATE.clientes.find(c=>c.id===id):null;$('cliTitle').textContent=editingCli?'Editar cliente':'Nuevo cliente';$('cliDelBtn').style.display=editingCli?'block':'none';
   const c=editingCli||{};$('f_razon').value=c.razonSocial||'';$('f_codigo').value=c.codigo||'';$('f_cuit').value=c.cuit||'';$('f_vend').value=c.vendedor||'Winflex';$('f_plazo').value=c.condicionDias!=null?c.condicionDias:30;$('f_modo').value=c.modoVencimiento||'factura';$('f_cheque').value=(c.diasCheque!=null?c.diasCheque:'');$('f_obs').value=c.obs||'';
   $('f_contado').checked=(+c.condicionDias===0&&c.condicionDias!=null);$('f_plazo').disabled=$('f_contado').checked;
@@ -985,8 +1016,12 @@ function saveCliente(){
   const plazo=$('f_contado').checked?0:(plazoRaw===''?30:Math.max(0,Math.floor(+plazoRaw)||0));
   const chRaw=$('f_cheque').value.trim();const diasCheque=chRaw===''?null:Math.max(0,Math.floor(+chRaw)||0);
   const obj={razonSocial:razon,codigo:$('f_codigo').value.trim(),cuit:$('f_cuit').value.trim(),vendedor:$('f_vend').value,condicionDias:plazo,modoVencimiento:$('f_modo').value,diasCheque,contactos,obs:$('f_obs').value.trim(),updatedAt:NOW()};
-  if(editingCli)Object.assign(editingCli,obj);else STATE.clientes.push({id:uid(),createdAt:NOW(),...obj});
-  closeOverlay('ovCliente');saveToCloud();renderClientes();renderCliList();renderResumen();toast('Cliente guardado','ok');
+  let creado=null;
+  if(editingCli)Object.assign(editingCli,obj);else{creado={id:uid(),createdAt:NOW(),...obj};STATE.clientes.push(creado)}
+  if(creado&&EFE_LINK_PENDIENTE){efeLinks()[EFE_LINK_PENDIENTE]=creado.id;EFE_LINK_PENDIENTE=null}
+  closeOverlay('ovCliente');saveToCloud();renderClientes();renderCliList();renderResumen();
+  if(puedeEfectivo()){renderEfectivo();renderTotal()}
+  toast('Cliente guardado','ok');
 }
 function deleteCliente(){if(!editingCli)return;const n=STATE.comprobantes.filter(f=>f.clienteId===editingCli.id).length;if(n>0){toast(`No se puede: tiene ${n} factura(s)`,'bad');return}if(!confirm('¿Eliminar este cliente?'))return;STATE.clientes=STATE.clientes.filter(c=>c.id!==editingCli.id);closeOverlay('ovCliente');saveToCloud();renderClientes();renderCliList();toast('Cliente eliminado')}
 
@@ -1357,7 +1392,7 @@ function efeCalc(){
       diasMax:abiertos.length?Math.max.apply(null,abiertos.map(a=>a.dias)):null,
       ultPago,diasSinPago:ultPago?efeDias(ultPago):null,
       cobrado:cobrados.reduce((s,m)=>s-m.importe,0),
-      oficial:efeMatchOficial(nombre)};
+      oficial:getCliente(efeLinkDe(nombre))||null};
   });
 }
 
@@ -1449,7 +1484,12 @@ function openEfeCli(i){
     </div>
     <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th class="r">Importe</th><th class="r">Saldo</th></tr></thead><tbody>${filas}</tbody></table></div>
     ${c.abiertos.length?`<div class="hint"><b>Sin cobrar (FIFO):</b> ${c.abiertos.map(a=>dShow(a.fecha)+' · '+fmt(a.monto)+' · '+a.dias+' d').join(' — ')}</div>`:'<div class="hint">Sin saldo pendiente de cobro.</div>'}
-    <div class="hint">Tocá cualquier línea para editarla.</div>`;
+    <div class="hint">Tocá cualquier línea para editarla.</div>
+    <div class="card" style="padding:14px;margin-top:14px;background:var(--surface2)"><h3>Vínculo con la cartera oficial</h3>
+      <div class="field">${efeLinkSelect(c.nombre)}</div>
+      ${c.oficial?`<button class="btn ghost sm" onclick="closeOverlay('ovEfeCli');openCliente('${c.oficial.id}')">Editar ficha del cliente</button>`
+        :`<button class="btn sm" onclick="nuevoClienteDesdeEfectivo(${JSON.stringify(c.nombre).replace(/"/g,'&quot;')})">Dar de alta en la cartera</button>`}
+      <div class="hint">Vinculalo para que en Cuenta total las dos cuentas de este cliente se sumen juntas.</div></div>`;
   openOverlay('ovEfeCli');
 }
 
@@ -1584,6 +1624,180 @@ function exportEfeJSON(){
   const blob=new Blob([JSON.stringify({efectivo:efeList()},null,2)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='winflex-efectivo-'+todayISO()+'.json';a.click();URL.revokeObjectURL(a.href);
+}
+
+/* ================= CUENTA TOTAL · oficial + efectivo (Caja 2) ================= */
+let TOT_CACHE=[], TOT_SEL=null;
+
+function efeLinks(){if(!STATE.efeLinks)STATE.efeLinks={};return STATE.efeLinks}
+/* id del cliente oficial al que corresponde un nombre de efectivo.
+   Un vínculo cargado a mano manda sobre el match automático por nombre. */
+function efeLinkDe(nombre){
+  const L=efeLinks();
+  if(Object.prototype.hasOwnProperty.call(L,nombre))return L[nombre]||null;
+  const m=efeMatchOficial(nombre);
+  return m?m.id:null;
+}
+function setEfeLink(nombre,val){
+  const L=efeLinks();
+  if(val==='__auto__')delete L[nombre];
+  else if(val==='__none__')L[nombre]=null;
+  else L[nombre]=val;
+  saveToCloud();renderEfectivo();renderTotal();
+  if(TOT_SEL)openCuentaKey(TOT_SEL);
+  toast('Vínculo actualizado','ok');
+}
+function efeLinkSelect(nombre){
+  const L=efeLinks(), actual=Object.prototype.hasOwnProperty.call(L,nombre)?(L[nombre]||'__none__'):'__auto__';
+  const auto=efeMatchOficial(nombre);
+  const ops=[`<option value="__auto__"${actual==='__auto__'?' selected':''}>Automático${auto?' — '+esc(auto.razonSocial):' (sin coincidencia)'}</option>`,
+             `<option value="__none__"${actual==='__none__'?' selected':''}>Sin vincular</option>`]
+    .concat(STATE.clientes.slice().sort((a,b)=>a.razonSocial.localeCompare(b.razonSocial))
+      .map(c=>`<option value="${c.id}"${actual===c.id?' selected':''}>${esc(c.razonSocial)}</option>`));
+  return `<select class="filter" style="max-width:100%" onchange="setEfeLink(${JSON.stringify(nombre).replace(/"/g,'&quot;')},this.value)">${ops.join('')}</select>`;
+}
+
+/* vencido de la cartera oficial de un cliente */
+function vencidoCliente(id){
+  return STATE.comprobantes.filter(f=>f.clienteId===id&&!isNC(f))
+    .reduce((s,f)=>{const e=estadoDe(f);return s+((e==='vencida'||e==='parcial-venc')?saldoDe(f):0)},0);
+}
+
+function totCalc(){
+  const efe=efeCalc(), usados=new Set(), filas=[];
+  STATE.clientes.forEach(c=>{
+    const míos=efe.filter(e=>efeLinkDe(e.nombre)===c.id);
+    míos.forEach(e=>usados.add(e.nombre));
+    const oficial=saldoCliente(c.id);
+    const efectivo=míos.reduce((s,e)=>s+e.pendiente,0);
+    const valores=míos.reduce((s,e)=>s+e.valores,0);
+    if(Math.abs(oficial)<0.5&&Math.abs(efectivo)<0.5)return;
+    filas.push({key:'c:'+c.id,nombre:c.razonSocial,cli:c,efes:míos,oficial,
+      vencido:vencidoCliente(c.id),efectivo,valores,total:oficial+efectivo});
+  });
+  efe.filter(e=>!usados.has(e.nombre)&&Math.abs(e.pendiente)>0.5).forEach(e=>{
+    filas.push({key:'e:'+e.nombre,nombre:e.nombre,cli:null,efes:[e],oficial:0,vencido:0,
+      efectivo:e.pendiente,valores:e.valores,total:e.pendiente});
+  });
+  return filas;
+}
+
+function renderTotal(){
+  if(!$('totBody'))return;
+  const filas=totCalc();
+  const of=filas.reduce((s,f)=>s+f.oficial,0);
+  const ef=filas.reduce((s,f)=>s+f.efectivo,0);
+  const va=filas.reduce((s,f)=>s+f.valores,0);
+  const ve=filas.reduce((s,f)=>s+f.vencido,0);
+  const mixtos=filas.filter(f=>Math.abs(f.oficial)>0.5&&Math.abs(f.efectivo)>0.5);
+
+  $('totKpis').innerHTML=`
+    <div class="kpi tot"><div class="bar"></div><div class="lab">Total por cobrar</div><div class="val num">${fmtM(of+ef)}</div><div class="meta">las dos cuentas juntas</div></div>
+    <div class="kpi por"><div class="bar"></div><div class="lab">Cobranza oficial</div><div class="val num">${fmtM(of)}</div><div class="meta">facturado</div></div>
+    <div class="kpi efe"><div class="bar"></div><div class="lab">Efectivo (Caja 2)</div><div class="val num">${fmtM(ef)}</div><div class="meta">${va?fmtM(va)+' con cheques a fecha':'remitos internos'}</div></div>
+    <div class="kpi venc"><div class="bar"></div><div class="lab">Vencido oficial</div><div class="val num" style="color:var(--venc)">${fmtM(ve)}</div><div class="meta">${mixtos.length} clientes en las dos cuentas</div></div>`;
+
+  const q=($('totSearch').value||'').toLowerCase(), ord=$('totOrden').value;
+  let lista=filas.filter(f=>f.nombre.toLowerCase().includes(q));
+  if($('totSoloMixtos').checked)lista=lista.filter(f=>Math.abs(f.oficial)>0.5&&Math.abs(f.efectivo)>0.5);
+  lista.sort((a,b)=> ord==='nombre'?a.nombre.localeCompare(b.nombre)
+    : ord==='oficial'?b.oficial-a.oficial
+    : ord==='efectivo'?b.efectivo-a.efectivo
+    : ord==='vencido'?b.vencido-a.vencido
+    : b.total-a.total);
+  TOT_CACHE=lista;
+
+  $('totBody').innerHTML=lista.length?lista.map((f,i)=>{
+    const tags=(f.cli&&f.efes.length?'<span class="tag-efe g">las dos cuentas</span>':'')
+      +(!f.cli?'<span class="tag-efe w">solo efectivo</span>':'')
+      +(f.valores?'<span class="tag-efe w">cheques a fecha</span>':'');
+    return `<tr class="efe-row" onclick="openCuenta(${i})">
+      <td><span class="cli-name">${esc(f.nombre)}</span>${tags}${f.cli?`<div class="cli-meta">${esc(f.cli.vendedor||'')} · ${condLabel(f.cli.condicionDias)}</div>`:''}</td>
+      <td class="r num">${f.oficial?fmt(f.oficial):'—'}</td>
+      <td class="r num"${f.vencido?' style="color:var(--venc)"':''}>${f.vencido?fmt(f.vencido):'—'}</td>
+      <td class="r num">${f.efectivo?fmt(f.efectivo):'—'}</td>
+      <td class="r num" style="font-weight:700">${fmt(f.total)}</td></tr>`;
+  }).join('')
+   :`<tr><td colspan="5" class="empty">No hay clientes con saldo para mostrar.</td></tr>`;
+}
+
+/* ---------- ficha combinada ---------- */
+function openCuenta(i){const f=TOT_CACHE[i];if(!f)return;TOT_SEL=f.key;pintarCuenta(f);openOverlay('ovCuenta')}
+function openCuentaKey(key){const f=totCalc().find(x=>x.key===key);if(f)pintarCuenta(f)}
+function pintarCuenta(f){
+  $('cuentaTit').textContent=f.nombre;
+  const comps=f.cli?STATE.comprobantes.filter(c=>c.clienteId===f.cli.id&&saldoDe(c)>0.5)
+      .sort((a,b)=>(vencimientoDe(a)<vencimientoDe(b)?-1:1)):[];
+  const filasOf=comps.map(c=>{
+    const e=estadoDe(c),badge=EM[e]||EM.pendiente;
+    return `<tr><td>${dShow(c.fecha)}</td><td>${tipoLabel(c.tipo)} ${esc(c.numero||'')}</td>
+      <td>${dShow(vencimientoDe(c))}</td><td class="r num">${fmt(c.importe)}</td>
+      <td class="r num" style="font-weight:600">${fmt(saldoDe(c))}</td>
+      <td><span class="tag-efe${e==='vencida'||e==='parcial-venc'?' w':''}">${badge.l}</span></td></tr>`}).join('');
+  let filasEf='';
+  f.efes.forEach(e=>{let acum=0;
+    filasEf+=e.movs.map(m=>{acum+=m.importe;
+      const fut=efeFuturo(m);
+      return `<tr><td>${m.fecha?dShow(m.fecha):'s/f'}</td>
+        <td>${esc(m.importe>0?(m.ref||'Remito'):(m.medio||'Pago'))}${fut?'<span class="tag-efe w">a fecha</span>':''}${m.nota?`<span class="tag-efe">${esc(m.nota)}</span>`:''}</td>
+        <td class="r num"${m.importe<0?' style="color:var(--cobr)"':''}>${fmt(m.importe)}</td>
+        <td class="r num">${fmt(acum)}</td></tr>`}).join('')});
+
+  const vinculos=f.efes.map(e=>`<div class="field" style="margin-bottom:8px"><label>Cuenta de efectivo &ldquo;${esc(e.nombre)}&rdquo; vinculada a</label>${efeLinkSelect(e.nombre)}</div>`).join('');
+
+  $('cuentaFoot').innerHTML = f.cli
+    ? `<button class="btn ghost" onclick="closeOverlay('ovCuenta');openCliente('${f.cli.id}')">Editar cliente</button>`
+    : `<button class="btn" onclick="nuevoClienteDesdeEfectivo(${JSON.stringify(f.efes[0].nombre).replace(/"/g,'&quot;')})">Dar de alta en la cartera</button>`;
+  $('cuentaBody').innerHTML=`
+    <div class="efe-chips" style="margin:0 0 16px">
+      <span class="efe-chip">Total <strong class="num" style="font-size:15px">${fmt(f.total)}</strong></span>
+      <span class="efe-chip">Oficial <strong class="num">${fmt(f.oficial)}</strong></span>
+      <span class="efe-chip">Efectivo <strong class="num">${fmt(f.efectivo)}</strong></span>
+      ${f.vencido?`<span class="efe-chip">Vencido oficial <strong class="num" style="color:var(--venc)">${fmt(f.vencido)}</strong></span>`:''}
+      ${f.valores?`<span class="efe-chip">Cheques a fecha <strong class="num">${fmt(f.valores)}</strong></span>`:''}
+    </div>
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:0 0 8px">Cobranza oficial</h3>
+    ${comps.length?`<div class="tablewrap" style="margin-bottom:18px"><table><thead><tr><th>Fecha</th><th>Comprob.</th><th>Vence</th><th class="r">Importe</th><th class="r">Saldo</th><th>Estado</th></tr></thead><tbody>${filasOf}</tbody></table></div>`
+      :`<div class="hint" style="margin-bottom:18px">${f.cli?'Sin comprobantes con saldo.':'Este cliente no está en la cartera oficial.'}</div>`}
+    <h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin:0 0 8px">Efectivo (Caja 2)</h3>
+    ${filasEf?`<div class="tablewrap" style="margin-bottom:18px"><table><thead><tr><th>Fecha</th><th>Concepto</th><th class="r">Importe</th><th class="r">Saldo</th></tr></thead><tbody>${filasEf}</tbody></table></div>`
+      :`<div class="hint" style="margin-bottom:18px">Sin movimientos de efectivo.</div>`}
+    ${vinculos?`<div class="card" style="padding:14px;background:var(--surface2)"><h3>Vínculo entre cuentas</h3>${vinculos}
+      <div class="hint">Si un cliente figura con distinto nombre en el Excel de efectivo, vinculalo acá para que las dos cuentas se sumen juntas.</div></div>`
+      :(f.cli?`<div class="card" style="padding:14px;background:var(--surface2)"><h3>Vínculo entre cuentas</h3>
+        <div class="field"><label>Agregar una cuenta de efectivo a este cliente</label>
+        <select class="filter" style="max-width:100%" onchange="if(this.value)setEfeLink(this.value,'${f.cli.id}')">
+        <option value="">Elegir una cuenta de efectivo…</option>
+        ${[...new Set(efeList().map(m=>m.cliente))].sort().map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')}
+        </select></div></div>`:'')}`;
+}
+
+
+/* ---------- base de datos conjunta: alta y edición de clientes ---------- */
+let EFE_LINK_PENDIENTE=null;
+
+/* Abre la ficha de cliente en blanco, con la razón social precargada.
+   Al guardar, el cliente nuevo queda vinculado a esa cuenta de efectivo. */
+function nuevoClienteDesdeEfectivo(nombre){
+  closeOverlay('ovCuenta');closeOverlay('ovEfeCli');
+  openCliente(null);
+  $('f_razon').value=nombre;
+  EFE_LINK_PENDIENTE=nombre;
+  $('cliTitle').textContent='Dar de alta en la cartera';
+}
+
+/* Crea de una vez los clientes que hoy sólo existen en efectivo. */
+function crearClientesFaltantes(){
+  const faltan=totCalc().filter(f=>!f.cli);
+  if(!faltan.length){toast('Ya están todos en la cartera','ok');return}
+  if(!confirm('Se van a dar de alta '+faltan.length+' clientes en la cartera oficial con el nombre que tienen en efectivo.\n\nQuedan con vendedor Winflex y plazo 30 días: después conviene repasar la ficha de cada uno.\n\n¿Seguir?'))return;
+  faltan.forEach(f=>{
+    const id=uid();
+    STATE.clientes.push(mapClienteIn({id,razonSocial:f.nombre,vendedor:'Winflex',condicionDias:30}));
+    f.efes.forEach(e=>efeLinks()[e.nombre]=id);
+  });
+  saveToCloud();renderClientes();renderCliList();renderTotal();renderEfectivo();
+  toast(faltan.length+' clientes dados de alta','ok');
 }
 
 (function init(){const u=localStorage.getItem(LS.user);if(u&&Object.values(PINS).includes(u)){CURRENT_USER=u;startApp()}else $('pinInput').focus()})();
