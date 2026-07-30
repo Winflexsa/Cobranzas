@@ -384,7 +384,12 @@ body.modo-modulo nav{display:none}
         <option value="vencido">Por vencido</option>
         <option value="nombre">Por nombre</option>
       </select>
+      <select class="filter" id="totFiltro" onchange="renderTotal()">
+        <option value="saldo">Solo con saldo</option>
+        <option value="todos">Todos los clientes</option>
+      </select>
       <label class="efe-chip" style="gap:7px;cursor:pointer"><input type="checkbox" id="totSoloMixtos" onchange="renderTotal()"> Solo los que est&aacute;n en las dos cuentas</label>
+      <button class="btn sm" onclick="openCliente(null)">+ Cliente</button>
       <button class="btn ghost sm" onclick="crearClientesFaltantes()">+ Dar de alta los que faltan</button>
     </div>
     <div class="tablewrap"><table>
@@ -1496,6 +1501,7 @@ function openEfeCli(i){
 /* ---------- alta / edición ---------- */
 function efeTipoChange(){$('efeMedioWrap').style.display=$('efeTipo').value==='pago'?'':'none'}
 function openEfeMov(id,cliente){
+  if(!id)EFE_MOV_LINK=null;
   EFE_EDIT=id?efeList().find(m=>m.id===id):null;
   const m=EFE_EDIT;
   $('efeMovTit').textContent=m?'Editar movimiento':'Nuevo movimiento';
@@ -1518,11 +1524,14 @@ function saveEfeMov(){
   if(!cli){toast('Falta el cliente','bad');return}
   if(!imp){toast('Falta el importe','bad');return}
   if(!fecha){toast('Falta la fecha','bad');return}
+  const conocido = efeList().some(m=>m.cliente===cli) || STATE.clientes.some(c=>c.razonSocial===cli);
+  if(!conocido && !EFE_MOV_LINK && !confirm('"'+cli+'" no figura entre los clientes. Se va a abrir una cuenta de efectivo nueva con ese nombre.\n\nSi es un cliente que ya existe, cancelá y elegilo de la lista para no duplicarlo.\n\n¿Crear la cuenta nueva?'))return;
   const esPago=$('efeTipo').value==='pago';
   const datos={cliente:cli,fecha,importe:esPago?-imp:imp,medio:esPago?$('efeMedio').value:'',ref:$('efeRef').value.trim(),nota:$('efeNota').value.trim(),updatedAt:NOW()};
   if(EFE_EDIT)Object.assign(EFE_EDIT,datos);
   else efeList().push(mapEfectivoIn({...datos,createdAt:NOW()}));
-  closeOverlay('ovEfeMov');saveToCloud();renderEfectivo();
+  if(EFE_MOV_LINK){efeLinks()[cli]=EFE_MOV_LINK;EFE_MOV_LINK=null}
+  closeOverlay('ovEfeMov');saveToCloud();renderEfectivo();renderTotal();
   toast(EFE_EDIT?'Movimiento actualizado':'Movimiento agregado','ok');
   EFE_EDIT=null;
 }
@@ -1663,7 +1672,7 @@ function vencidoCliente(id){
     .reduce((s,f)=>{const e=estadoDe(f);return s+((e==='vencida'||e==='parcial-venc')?saldoDe(f):0)},0);
 }
 
-function totCalc(){
+function totCalc(todos){
   const efe=efeCalc(), usados=new Set(), filas=[];
   STATE.clientes.forEach(c=>{
     const míos=efe.filter(e=>efeLinkDe(e.nombre)===c.id);
@@ -1671,11 +1680,11 @@ function totCalc(){
     const oficial=saldoCliente(c.id);
     const efectivo=míos.reduce((s,e)=>s+e.pendiente,0);
     const valores=míos.reduce((s,e)=>s+e.valores,0);
-    if(Math.abs(oficial)<0.5&&Math.abs(efectivo)<0.5)return;
+    if(!todos&&Math.abs(oficial)<0.5&&Math.abs(efectivo)<0.5)return;
     filas.push({key:'c:'+c.id,nombre:c.razonSocial,cli:c,efes:míos,oficial,
       vencido:vencidoCliente(c.id),efectivo,valores,total:oficial+efectivo});
   });
-  efe.filter(e=>!usados.has(e.nombre)&&Math.abs(e.pendiente)>0.5).forEach(e=>{
+  efe.filter(e=>!usados.has(e.nombre)&&(todos||Math.abs(e.pendiente)>0.5)).forEach(e=>{
     filas.push({key:'e:'+e.nombre,nombre:e.nombre,cli:null,efes:[e],oficial:0,vencido:0,
       efectivo:e.pendiente,valores:e.valores,total:e.pendiente});
   });
@@ -1684,7 +1693,7 @@ function totCalc(){
 
 function renderTotal(){
   if(!$('totBody'))return;
-  const filas=totCalc();
+  const filas=totCalc($('totFiltro').value==='todos');
   const of=filas.reduce((s,f)=>s+f.oficial,0);
   const ef=filas.reduce((s,f)=>s+f.efectivo,0);
   const va=filas.reduce((s,f)=>s+f.valores,0);
@@ -1710,7 +1719,8 @@ function renderTotal(){
   $('totBody').innerHTML=lista.length?lista.map((f,i)=>{
     const tags=(f.cli&&f.efes.length?'<span class="tag-efe g">las dos cuentas</span>':'')
       +(!f.cli?'<span class="tag-efe w">solo efectivo</span>':'')
-      +(f.valores?'<span class="tag-efe w">cheques a fecha</span>':'');
+      +(f.valores?'<span class="tag-efe w">cheques a fecha</span>':'')
+      +(Math.abs(f.total)<0.5?'<span class="tag-efe">en cero</span>':'');
     return `<tr class="efe-row" onclick="openCuenta(${i})">
       <td><span class="cli-name">${esc(f.nombre)}</span>${tags}${f.cli?`<div class="cli-meta">${esc(f.cli.vendedor||'')} · ${condLabel(f.cli.condicionDias)}</div>`:''}</td>
       <td class="r num">${f.oficial?fmt(f.oficial):'—'}</td>
@@ -1723,7 +1733,7 @@ function renderTotal(){
 
 /* ---------- ficha combinada ---------- */
 function openCuenta(i){const f=TOT_CACHE[i];if(!f)return;TOT_SEL=f.key;pintarCuenta(f);openOverlay('ovCuenta')}
-function openCuentaKey(key){const f=totCalc().find(x=>x.key===key);if(f)pintarCuenta(f)}
+function openCuentaKey(key){const f=totCalc(true).find(x=>x.key===key);if(f)pintarCuenta(f)}
 function pintarCuenta(f){
   $('cuentaTit').textContent=f.nombre;
   const comps=f.cli?STATE.comprobantes.filter(c=>c.clienteId===f.cli.id&&saldoDe(c)>0.5)
@@ -1745,9 +1755,12 @@ function pintarCuenta(f){
 
   const vinculos=f.efes.map(e=>`<div class="field" style="margin-bottom:8px"><label>Cuenta de efectivo &ldquo;${esc(e.nombre)}&rdquo; vinculada a</label>${efeLinkSelect(e.nombre)}</div>`).join('');
 
-  $('cuentaFoot').innerHTML = f.cli
-    ? `<button class="btn ghost" onclick="closeOverlay('ovCuenta');openCliente('${f.cli.id}')">Editar cliente</button>`
-    : `<button class="btn" onclick="nuevoClienteDesdeEfectivo(${JSON.stringify(f.efes[0].nombre).replace(/"/g,'&quot;')})">Dar de alta en la cartera</button>`;
+  const cuentaEfe=f.efes.length?f.efes[0].nombre:(f.cli?f.cli.razonSocial:f.nombre);
+  $('cuentaFoot').innerHTML =
+    `<button class="btn ghost" onclick="movDesdeCuenta(${JSON.stringify(cuentaEfe).replace(/"/g,'&quot;')},'${f.cli?f.cli.id:''}')">+ Movimiento de efectivo</button> `
+    + (f.cli
+      ? `<button class="btn ghost" onclick="closeOverlay('ovCuenta');openCliente('${f.cli.id}')">Editar cliente</button>`
+      : `<button class="btn" onclick="nuevoClienteDesdeEfectivo(${JSON.stringify(f.efes[0].nombre).replace(/"/g,'&quot;')})">Dar de alta en la cartera</button>`);
   $('cuentaBody').innerHTML=`
     <div class="efe-chips" style="margin:0 0 16px">
       <span class="efe-chip">Total <strong class="num" style="font-size:15px">${fmt(f.total)}</strong></span>
@@ -1788,7 +1801,7 @@ function nuevoClienteDesdeEfectivo(nombre){
 
 /* Crea de una vez los clientes que hoy sólo existen en efectivo. */
 function crearClientesFaltantes(){
-  const faltan=totCalc().filter(f=>!f.cli);
+  const faltan=totCalc(true).filter(f=>!f.cli);
   if(!faltan.length){toast('Ya están todos en la cartera','ok');return}
   if(!confirm('Se van a dar de alta '+faltan.length+' clientes en la cartera oficial con el nombre que tienen en efectivo.\n\nQuedan con vendedor Winflex y plazo 30 días: después conviene repasar la ficha de cada uno.\n\n¿Seguir?'))return;
   faltan.forEach(f=>{
@@ -1798,6 +1811,17 @@ function crearClientesFaltantes(){
   });
   saveToCloud();renderClientes();renderCliList();renderTotal();renderEfectivo();
   toast(faltan.length+' clientes dados de alta','ok');
+}
+
+
+/* Abre un movimiento de efectivo desde la ficha combinada de un cliente.
+   Si el cliente todavía no tiene cuenta de efectivo, se le abre una con su
+   razón social y queda vinculada sola. */
+let EFE_MOV_LINK=null;
+function movDesdeCuenta(nombreCuenta,cliId){
+  closeOverlay('ovCuenta');
+  openEfeMov(null,nombreCuenta);
+  if(cliId)EFE_MOV_LINK=cliId;
 }
 
 (function init(){const u=localStorage.getItem(LS.user);if(u&&Object.values(PINS).includes(u)){CURRENT_USER=u;startApp()}else $('pinInput').focus()})();
