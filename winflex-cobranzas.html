@@ -361,6 +361,7 @@ body.modo-modulo nav{display:none}
         <option value="nombre">Por nombre</option>
       </select>
       <button class="btn sm" onclick="openEfeMov()">+ Movimiento</button>
+      <label class="btn sm" style="display:inline-flex;align-items:center;gap:4px"><input type="file" accept=".xlsx,.xls" multiple hidden onchange="onEfeRemitos(event)">&#128196; Subir remitos</label>
       <label class="btn ghost sm" style="display:inline-flex;align-items:center;gap:4px"><input type="file" accept=".xlsx,.xls" hidden onchange="onEfeExcel(event)">&uarr; Importar Excel</label>
       <button class="btn sm" onclick="exportEfeExcel()">&#128202; Informe</button>
       <button class="btn ghost sm" onclick="exportEfeJSON()">&darr; Respaldo</button>
@@ -1365,7 +1366,7 @@ const EFE_XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full
 const EFE_SEMILLA=[{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-03-02","importe":512000.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-04-15","importe":957000.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-05-19","importe":619500.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-06-25","importe":592000.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-07-28","importe":1020000.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"","fecha":"2026-06-18","importe":-500000.0,"medio":"Efectivo","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"","fecha":"2026-06-18","importe":-856761.31,"medio":"Cheque","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"","fecha":"2026-06-30","importe":-740000.0,"medio":"Cheque","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-06-29","importe":345000.0,"medio":"","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-07-01","importe":124000.0,"medio":"","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-07-06","importe":814000.0,"medio":"","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-07-14","importe":1019000.0,"medio":"","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-07-23","importe":96000.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-03-09","importe":12000.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-04-27","importe":28000.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-05-04","importe":43750.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-05-13","importe":42000.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-05-19","importe":31500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"WP10","fecha":"2026-05-27","importe":617500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"MARAFLEX","fecha":"2026-06-18","importe":1604500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"MARAFLEX","fecha":"2026-07-16","importe":2539500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"WP10","fecha":"2026-07-27","importe":388500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"","fecha":"2026-07-28","importe":-617500.0,"medio":"Efectivo","nota":""},{"cliente":"ESTEROS AZULES","ref":"F40","fecha":"2026-07-03","importe":8610624.0,"medio":"","nota":""},{"cliente":"IGNACIO","ref":"WP","fecha":"2026-07-27","importe":2306000.0,"medio":"","nota":"SE ENTREGA 28/07"},{"cliente":"IGNACIO","ref":"","fecha":"2026-07-28","importe":-2306000.0,"medio":"Efectivo","nota":""},{"cliente":"KIOLLO","ref":"RR","fecha":"2026-07-07","importe":990000.0,"medio":"","nota":""},{"cliente":"KIOLLO","ref":"","fecha":"2026-07-24","importe":1117000.0,"medio":"","nota":""},{"cliente":"KIOLLO","ref":"","fecha":"2026-07-29","importe":-990000.0,"medio":"Efectivo","nota":""},{"cliente":"LEOPOLDO","ref":"","fecha":"2026-07-13","importe":1078000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-15","importe":186450.0,"medio":"","nota":"Saldo"},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-17","importe":537000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-21","importe":447000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-30","importe":273000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-06","importe":447000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-14","importe":273000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-19","importe":325800.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-28","importe":439000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-02","importe":198000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-09","importe":198000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-16","importe":273000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-19","importe":198000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-24","importe":396000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-07-01","importe":396000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-07-10","importe":546000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-07-15","importe":185000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-22","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-28","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-08","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-12","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-19","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-06-02","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-06-03","importe":-1000000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-07-01","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-07-07","importe":-396000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-07-20","importe":-600000.0,"medio":"Efectivo","nota":""},{"cliente":"MAIRE NORMA CUELLAR","ref":"F40","fecha":"2026-06-18","importe":330504.0,"medio":"","nota":""},{"cliente":"MAIRE NORMA CUELLAR","ref":"","fecha":"2026-06-19","importe":-330000.0,"medio":"","nota":""},{"cliente":"MARCELO (LLAMPICO)","ref":"","fecha":"2026-07-23","importe":340000.0,"medio":"","nota":""},{"cliente":"MARCELO (LLAMPICO)","ref":"","fecha":null,"importe":-500000.0,"medio":"Transferencia","nota":""},{"cliente":"MONTI","ref":"LAMINA","fecha":"2026-07-08","importe":437920.0,"medio":"","nota":""},{"cliente":"STURNO","ref":"WP08","fecha":"2026-06-12","importe":97500.0,"medio":"","nota":""},{"cliente":"STURNO","ref":"WP08","fecha":"2026-07-10","importe":195000.0,"medio":"","nota":""},{"cliente":"TASTY FOODS","ref":"WP08","fecha":"2026-07-08","importe":585000.0,"medio":"","nota":""},{"cliente":"TASTY FOODS","ref":"WP08","fecha":"2026-07-16","importe":585000.0,"medio":"","nota":""},{"cliente":"TASTY FOODS","ref":"WP08","fecha":"2026-07-28","importe":684750.0,"medio":"","nota":""},{"cliente":"TASTY FOODS","ref":"","fecha":"2026-09-04","importe":-585000.0,"medio":"Cheque","nota":""},{"cliente":"TASTY FOODS","ref":"","fecha":"2026-09-05","importe":-585000.0,"medio":"Cheque","nota":""},{"cliente":"TASTY FOODS","ref":"","fecha":"2026-09-07","importe":-684750.0,"medio":"Cheque","nota":""},{"cliente":"GUEVINA","ref":"","fecha":"2026-07-28","importe":259500.0,"medio":"","nota":""}];
 let EFE_SEL=null, EFE_EDIT=null, EFE_IMPORT=null, EFE_CACHE=[];
 
-function mapEfectivoIn(m){return {id:m.id||uid(),cliente:(m.cliente||'').toString().trim(),ref:m.ref||'',numero:(m.numero==null?'':String(m.numero)).trim(),aplic:Array.isArray(m.aplic)?m.aplic.map(a=>({r:a.r,m:Math.round((+a.m||0)*100)/100})).filter(a=>a.r&&a.m>0):[],fecha:(m.fecha||'').slice(0,10)||null,importe:+m.importe||0,medio:m.medio||'',nota:m.nota||'',createdAt:m.createdAt||NOW(),updatedAt:m.updatedAt||NOW()}}
+function mapEfectivoIn(m){return {id:m.id||uid(),cliente:(m.cliente||'').toString().trim(),ref:m.ref||'',numero:(m.numero==null?'':String(m.numero)).trim(),aplic:Array.isArray(m.aplic)?m.aplic.map(a=>({r:a.r,m:Math.round((+a.m||0)*100)/100})).filter(a=>a.r&&a.m>0):[],items:Array.isArray(m.items)?m.items.map(x=>({d:String(x.d||x.desc||''),i:Math.round((+(x.i||x.importe)||0)*100)/100})):[],fecha:(m.fecha||'').slice(0,10)||null,importe:+m.importe||0,medio:m.medio||'',nota:m.nota||'',createdAt:m.createdAt||NOW(),updatedAt:m.updatedAt||NOW()}}
 function efeList(){if(!STATE.efectivo)STATE.efectivo=[];return STATE.efectivo}
 function efeDias(f){if(!f)return 0;return Math.floor((new Date(todayISO()+'T00:00:00')-new Date(f+'T00:00:00'))/864e5)}
 function efeFuturo(m){return m.importe<0 && !!m.fecha && m.fecha>todayISO()}
@@ -1497,7 +1498,7 @@ function openEfeCli(i){
       <td>${m.fecha?dShow(m.fecha):'s/f'}</td>
       <td>${esc(et)}${fut?'<span class="tag-efe w">a fecha</span>':''}${extra}${m.nota?`<span class="tag-efe">${esc(m.nota)}</span>`:''}</td>
       <td class="r num"${m.importe<0?' style="color:var(--cobr)"':''}>${fmt(m.importe)}</td>
-      <td class="r num">${fmt(acum)}</td></tr>`}).join('');
+      <td class="r num">${fmt(acum)}</td></tr>${(m.items&&m.items.length)?`<tr><td></td><td colspan="3" class="cli-meta" style="padding-top:0">${esc(m.items.map(x=>x.d+' · '+fmt(x.i)).join('  |  '))}</td></tr>`:''}`}).join('');
   const ofi=c.oficial?`<div class="efe-alert ok" style="margin-bottom:14px">En cartera oficial como <b>${esc(c.oficial.razonSocial)}</b> · saldo facturado ${fmt(saldoCliente(c.oficial.id))} · <b>total combinado ${fmt(saldoCliente(c.oficial.id)+Math.max(0,c.pendiente))}</b></div>`
     :`<div class="hint" style="margin-bottom:14px">No está en la cartera oficial: sólo tiene remitos internos.</div>`;
   $('efeCliBody').innerHTML=`${ofi}
@@ -1859,9 +1860,12 @@ function movDesdeCuenta(nombreCuenta,cliId){
 
 /* ---------- números de remito e imputación de pagos ---------- */
 function efeProxNumero(){
-  const n=efeList().filter(m=>m.importe>0).map(m=>parseInt(String(m.numero).replace(/\D/g,''),10))
-    .filter(x=>!isNaN(x));
-  return n.length?String(Math.max.apply(null,n)+1):'1';
+  const nums=efeList().filter(m=>m.importe>0&&m.numero).map(m=>String(m.numero).trim());
+  const n=nums.map(x=>parseInt(x.replace(/\D/g,''),10)).filter(x=>!isNaN(x));
+  if(!n.length)return '';
+  const prox=String(Math.max.apply(null,n)+1);
+  const ancho=Math.max.apply(null,nums.map(x=>x.replace(/\D/g,'').length)); // respeta el 00001
+  return prox.length<ancho?prox.padStart(ancho,'0'):prox;
 }
 function efeRemitoLabel(r){return r.numero?('Remito '+r.numero):(r.ref||'Remito')}
 /* cuánto de ese remito ya está imputado por OTROS pagos */
@@ -2032,7 +2036,7 @@ async function exportEfeExcel(){
 
     /* ====== REMITOS ====== */
     const colsR=[['Cliente',30,'l'],['Nº',10,'l'],['Fecha',12,'l'],['Ref.',12,'l'],['Importe',14,'r'],
-                 ['Cobrado',14,'r'],['Saldo',14,'r'],['Días',9,'r'],['Estado',12,'l'],['Cancelado por',42,'l'],['Observación',30,'l']];
+                 ['Cobrado',14,'r'],['Saldo',14,'r'],['Días',9,'r'],['Estado',12,'l'],['Cancelado por',42,'l'],['Detalle',46,'l'],['Observación',30,'l']];
     const wr=hoja('Remitos',colsR);
     let ri=2;
     C.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre)).forEach(c=>{
@@ -2040,7 +2044,8 @@ async function exportEfeExcel(){
         const saldo=saldoRem[rm.id]||0, cob=rm.importe-saldo;
         const est=saldo<0.5?'Cobrado':(cob>0.5?'Parcial':'Pendiente');
         fila(wr,ri,[c.nombre,rm.numero||'',rm.fecha?dShow(rm.fecha):'',rm.ref||'',rm.importe,cob,saldo,
-          saldo>0.5?efeDias(rm.fecha):'',est,(pagoDe[rm.id]||[]).join(' · '),rm.nota||''],colsR);
+          saldo>0.5?efeDias(rm.fecha):'',est,(pagoDe[rm.id]||[]).join(' · '),
+          (rm.items||[]).map(x=>x.d+' ('+fmt(x.i)+')').join(' · '),rm.nota||''],colsR);
         if(saldo>0.5&&efeDias(rm.fecha)>60){const cell=wr.getCell(ri,8);cell.font={size:10,bold:true,color:{argb:ROJO}}}
         ri++})});
 
@@ -2094,6 +2099,132 @@ async function exportEfeExcel(){
     a.download='Informe-Efectivo-Winflex-'+todayISO()+'.xlsx';a.click();
     toast('Informe descargado','ok');
   }catch(e){toast('Error al generar el informe: '+e.message,'bad')}
+}
+
+
+/* ---------- subir remitos internos (planilla de movimiento interno) ---------- */
+let EFE_RTOS=null;
+
+function efeParseRemito(wb,archivo){
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  if(!ws||!ws['!ref'])return null;
+  const rg=XLSX.utils.decode_range(ws['!ref']); rg.s.c=0; rg.s.r=0;
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null,range:rg});
+  const txt=v=>(typeof v==='string')?v.trim():'';
+  let numero='',fecha=null,cliente='',declarado=0;
+  const items=[];
+  rows.forEach(r=>{
+    if(!r)return;
+    r.forEach((v,ci)=>{
+      const t=txt(v); if(!t)return;
+      const m=t.match(/NRO\.?\s*[:\-]?\s*([0-9]+)/i);
+      if(m&&!numero)numero=m[1];
+      if(/^se(ñ|n)ores/i.test(t)&&!cliente){
+        for(let j=ci+1;j<r.length;j++){if(txt(r[j])){cliente=txt(r[j]).replace(/\s+/g,' ').trim();break}}
+      }
+      if(!fecha){
+        if(v instanceof Date){fecha=v.toISOString().slice(0,10)}
+        else{const d=t.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})$/);
+          if(d){let y=+d[3];y=y<100?2000+y:y;
+            fecha=y+'-'+String(+d[2]).padStart(2,'0')+'-'+String(+d[1]).padStart(2,'0')}}
+      }
+    });
+    const nums=r.map(v=>v).filter(v=>typeof v==='number');
+    const desc=r.map(v=>txt(v)).filter(t=>t.length>4&&!/^se(ñ|n)ores/i.test(t))[0]||'';
+    if(desc&&nums.length){
+      const imp=nums[nums.length-1];
+      if(imp>0&&/\d/.test(desc))items.push({d:desc.replace(/\s+/g,' ').trim(),i:Math.round(imp*100)/100});
+    }else if(!desc&&nums.length===1&&nums[0]>0){declarado=Math.max(declarado,nums[0])}
+  });
+  const total=Math.round(items.reduce((s,i)=>s+i.i,0)*100)/100;
+  if(!items.length&&!declarado)return null;
+  return {archivo,numero,fecha,cliente,items,total:total||declarado,declarado};
+}
+
+/* nombre de cuenta de efectivo que mejor coincide con el del remito */
+function efeCuentaSugerida(nombre){
+  const n=efeNorm(nombre); if(n.length<3)return null;
+  const cuentas=[...new Set(efeList().map(m=>m.cliente))];
+  let hit=cuentas.find(c=>efeNorm(c)===n)
+       || cuentas.find(c=>{const r=efeNorm(c);return r&&(r.includes(n)||n.includes(r))});
+  if(hit)return hit;
+  const cli=efeMatchOficial(nombre);
+  return cli?cli.razonSocial:null;
+}
+
+function onEfeRemitos(ev){
+  const files=[...ev.target.files]; ev.target.value=''; if(!files.length)return;
+  toast('Leyendo '+files.length+' remito'+(files.length>1?'s':'')+'…');
+  loadScript(EFE_XLSX_URL).then(async()=>{
+    const out=[];
+    for(const f of files){
+      try{
+        const buf=await f.arrayBuffer();
+        const r=efeParseRemito(XLSX.read(new Uint8Array(buf),{type:'array',cellDates:true}),f.name);
+        if(r){r.cuenta=efeCuentaSugerida(r.cliente)||r.cliente;r.usar=true;out.push(r)}
+        else out.push({archivo:f.name,error:'No pude leer los datos del remito'});
+      }catch(e){out.push({archivo:f.name,error:e.message})}
+    }
+    EFE_RTOS=out; efeRenderRtos();
+  }).catch(e=>toast(e.message,'bad'));
+}
+
+function efeSetRto(i,campo,val){
+  if(!EFE_RTOS||!EFE_RTOS[i])return;
+  EFE_RTOS[i][campo]= campo==='usar' ? !!val : val;
+  if(campo!=='usar')efeRenderRtos();
+}
+
+function efeRenderRtos(){
+  if(!EFE_RTOS){$('efePreview').innerHTML='';return}
+  const cuentas=[...new Set(efeList().map(m=>m.cliente).concat(STATE.clientes.map(c=>c.razonSocial)))].filter(Boolean).sort();
+  const filas=EFE_RTOS.map((r,i)=>{
+    if(r.error)return `<tr><td colspan="6" style="color:var(--venc)">${esc(r.archivo)} — ${esc(r.error)}</td></tr>`;
+    const dup=efeList().some(m=>m.importe>0&&String(m.numero)===String(r.numero)&&m.numero);
+    const nueva=!cuentas.some(c=>c===r.cuenta);
+    const avisos=[dup?'<span class="tag-efe w">Nº repetido</span>':'',
+                  nueva?'<span class="tag-efe">cuenta nueva</span>':'',
+                  (r.declarado&&Math.abs(r.declarado-r.total)>1)?`<span class="tag-efe w">el total del remito dice ${fmt(r.declarado)}</span>`:'',
+                  !r.fecha?'<span class="tag-efe w">sin fecha</span>':''].join('');
+    const ops=[`<option value="${esc(r.cliente)}"${r.cuenta===r.cliente?' selected':''}>${esc(r.cliente)} (como viene)</option>`]
+      .concat(cuentas.map(c=>`<option value="${esc(c)}"${r.cuenta===c?' selected':''}>${esc(c)}</option>`)).join('');
+    return `<tr>
+      <td><input type="checkbox" ${r.usar?'checked':''} onchange="efeSetRto(${i},'usar',this.checked)"></td>
+      <td><b>${esc(r.numero||'s/n')}</b><div class="cli-meta">${esc(r.archivo)}</div></td>
+      <td>${r.fecha?dShow(r.fecha):'—'}</td>
+      <td><select class="filter" style="max-width:210px" onchange="efeSetRto(${i},'cuenta',this.value)">${ops}</select>${avisos}</td>
+      <td class="r num" style="font-weight:700">${fmt(r.total)}</td>
+      <td class="cli-meta">${esc(r.items.map(x=>x.d).join(' · '))}</td></tr>`;
+  }).join('');
+  const ok=EFE_RTOS.filter(r=>!r.error&&r.usar);
+  const suma=ok.reduce((s,r)=>s+r.total,0);
+  $('efePreview').innerHTML=`<div class="card" style="margin-bottom:18px">
+    <h3>Remitos le&iacute;dos</h3>
+    <div class="efe-chips" style="margin:0 0 12px">
+      <span class="efe-chip">A cargar <strong class="num">${ok.length}</strong></span>
+      <span class="efe-chip">Total <strong class="num">${fmt(suma)}</strong></span>
+    </div>
+    <div class="tablewrap"><table><thead><tr><th style="width:34px"></th><th>N&ordm;</th><th>Fecha</th><th>Cliente</th><th class="r">Importe</th><th>Detalle</th></tr></thead><tbody>${filas}</tbody></table></div>
+    <div style="margin-top:12px">
+      <button class="btn sm" onclick="cargarEfeRtos()">Cargar ${ok.length} remito${ok.length===1?'':'s'}</button>
+      <button class="btn ghost sm" style="margin-left:8px" onclick="EFE_RTOS=null;efeRenderRtos()">Cancelar</button>
+    </div>
+    <div class="hint">Revis&aacute; que el cliente sea el correcto: si el remito trae un nombre nuevo se abre una cuenta de efectivo con ese nombre. Eleg&iacute; uno de la lista para que quede en la cuenta que ya existe.</div>
+  </div>`;
+}
+
+function cargarEfeRtos(){
+  const ok=(EFE_RTOS||[]).filter(r=>!r.error&&r.usar);
+  if(!ok.length){toast('No hay remitos seleccionados','bad');return}
+  const dups=ok.filter(r=>r.numero&&efeList().some(m=>m.importe>0&&String(m.numero)===String(r.numero)));
+  if(dups.length&&!confirm('Hay '+dups.length+' remito(s) con un número que ya está cargado (Nº '+dups.map(r=>r.numero).join(', ')+').\n\n¿Cargarlos igual?'))return;
+  ok.forEach(r=>{
+    efeList().push(mapEfectivoIn({cliente:r.cuenta,numero:r.numero,fecha:r.fecha,
+      importe:r.total,ref:'',items:r.items,nota:'',createdAt:NOW()}));
+  });
+  EFE_RTOS=null;$('efePreview').innerHTML='';
+  saveToCloud();renderEfectivo();renderTotal();
+  toast(ok.length+' remito'+(ok.length===1?'':'s')+' cargado'+(ok.length===1?'':'s'),'ok');
 }
 
 (function init(){const u=localStorage.getItem(LS.user);if(u&&Object.values(PINS).includes(u)){CURRENT_USER=u;startApp()}else $('pinInput').focus()})();
