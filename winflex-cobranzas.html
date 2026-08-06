@@ -248,6 +248,17 @@ body.modo-modulo nav{display:none}
   .tag-efe.g{border-color:var(--cobr);color:var(--cobr)}
   .kpi.efe .bar{background:#7a5cd0}
   .efe-row{cursor:pointer}
+  .kpis.k5{grid-template-columns:repeat(5,1fr)}
+  .tag-efe.p{border-color:#7a5cd0;color:#7a5cd0}
+  .efe-split{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  .efe-line{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:12.5px}
+  .efe-line .nm{width:92px;color:var(--muted);font-weight:600;flex:none}
+  .efe-line .tr{flex:1;height:9px;border-radius:5px;background:var(--bg2);overflow:hidden;min-width:40px}
+  .efe-line .tr i{display:block;height:100%;background:var(--accent)}
+  .efe-line .vl{width:104px;text-align:right;font-weight:700}
+  .efe-filtro{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 13px;font-size:12.5px;margin-bottom:14px;color:var(--muted)}
+  .efe-filtro strong{color:var(--text)}
+  @media(max-width:760px){.efe-split{grid-template-columns:1fr}.kpis.k5{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -344,12 +355,19 @@ body.modo-modulo nav{display:none}
   <!-- IMPORTAR -->
   <!-- EFECTIVO (remitos internos) -->
   <section class="tab" id="tab-efectivo">
-    <div class="kpis" id="efeKpis"></div>
+    <div class="kpis k5" id="efeKpis"></div>
     <div id="efeAlertas" style="margin-bottom:18px"></div>
     <div class="card" style="margin-bottom:18px">
       <h3>Antig&uuml;edad del saldo &middot; imputaci&oacute;n FIFO</h3>
       <div class="efe-bar" id="efeAging"></div>
       <div class="efe-chips" id="efeChips"></div>
+    </div>
+    <div class="card" style="margin-bottom:18px">
+      <h3>Composici&oacute;n del pendiente</h3>
+      <div class="efe-split">
+        <div><div class="hint" style="margin:0 0 8px">Por vendedor</div><div id="efeXVend"></div></div>
+        <div><div class="hint" style="margin:0 0 8px">Por tipo de producto</div><div id="efeXProd"></div></div>
+      </div>
     </div>
     <div class="toolbar">
       <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
@@ -360,12 +378,15 @@ body.modo-modulo nav{display:none}
         <option value="sinpago">Por d&iacute;as sin pagar</option>
         <option value="nombre">Por nombre</option>
       </select>
+      <select class="filter" id="efeFVend" onchange="renderEfectivo()"><option value="">Todos los vendedores</option></select>
+      <select class="filter" id="efeFProd" onchange="renderEfectivo()"><option value="">Todos los productos</option></select>
       <button class="btn sm" onclick="openEfeMov()">+ Movimiento</button>
       <label class="btn sm" style="display:inline-flex;align-items:center;gap:4px"><input type="file" accept=".xlsx,.xls" multiple hidden onchange="onEfeRemitos(event)">&#128196; Subir remitos</label>
       <label class="btn ghost sm" style="display:inline-flex;align-items:center;gap:4px"><input type="file" accept=".xlsx,.xls" hidden onchange="onEfeExcel(event)">&uarr; Importar Excel</label>
       <button class="btn sm" onclick="exportEfeExcel()">&#128202; Informe</button>
       <button class="btn ghost sm" onclick="exportEfeJSON()">&darr; Respaldo</button>
     </div>
+    <div id="efeFiltroInfo"></div>
     <div id="efePreview"></div>
     <div class="tablewrap"><table>
       <thead><tr><th>Cliente</th><th class="r">Pendiente</th><th class="r">%</th><th class="r">D&iacute;as m&aacute;x.</th><th class="r">&Uacute;lt. pago</th><th>Antig&uuml;edad</th></tr></thead>
@@ -508,7 +529,7 @@ body.modo-modulo nav{display:none}
 <div class="overlay" id="ovEfeMov"><div class="modal" style="max-width:470px">
   <header><h2 id="efeMovTit">Nuevo movimiento</h2><button class="x" onclick="closeOverlay('ovEfeMov')">&times;</button></header>
   <div class="body">
-    <div class="field"><label>Cliente *</label><input id="efeCliente" list="efeClientesList" placeholder="Ej: EL MATACO" oninput="efeRenderAplic()"><datalist id="efeClientesList"></datalist></div>
+    <div class="field"><label>Cliente *</label><input id="efeCliente" list="efeClientesList" placeholder="Ej: EL MATACO" oninput="efeRenderAplic();efeAutoVend()"><datalist id="efeClientesList"></datalist></div>
     <div class="frow">
       <div class="field"><label>Tipo</label><select id="efeTipo" onchange="efeTipoChange()"><option value="remito">Remito (suma deuda)</option><option value="pago">Pago (cancela)</option></select></div>
       <div class="field"><label>Fecha *</label><input id="efeFecha" type="date"></div>
@@ -521,8 +542,15 @@ body.modo-modulo nav{display:none}
     </div>
     <div class="frow">
       <div class="field" id="efeNumWrap"><label>N&ordm; de remito interno</label><input id="efeNumero" placeholder="Ej: 001"></div>
-      <div class="field"><label>Referencia</label><input id="efeRef" placeholder="WP10, F40, MARAFLEX&hellip;"></div>
+      <div class="field"><label>Referencia</label><input id="efeRef" placeholder="WP10, F40, MARAFLEX&hellip;" oninput="efeAutoProd()"></div>
     </div>
+    <div class="frow">
+      <div class="field"><label>Vendedor</label><select id="efeVend"><option value="">Sin asignar</option><option>Enrique</option><option>Winflex</option><option>Nitopi</option></select></div>
+      <div class="field" id="efeProdWrap"><label>Tipo de producto</label><select id="efeProd"><option value="">Sin asignar</option><option>Flexible</option><option>Bandejas</option><option>Lámina</option></select></div>
+    </div>
+    <div class="field" id="efeEntWrap"><label>Estado de entrega</label><select id="efeEnt">
+      <option value="1">Entregado / retirado</option>
+      <option value="0">Todav&iacute;a sin entregar (no suma al total a cobrar)</option></select></div>
     <div class="field"><label>Observaci&oacute;n</label><input id="efeNota" placeholder="Opcional"></div>
     <div id="efeAplicWrap"></div>
     <div class="hint" id="efeMovHint">El importe va siempre en positivo. En un pago, si es un cheque a fecha, poné la fecha en que se cobra: queda marcado como valor a cobrar y no cancela la antigüedad hasta ese día.</div>
@@ -1362,11 +1390,41 @@ async function exportExcel(){
 const EFE_USERS=['Matías','Mirta','Georgina'];
 function puedeEfectivo(){return EFE_USERS.includes(CURRENT_USER)}
 const EFE_BUCKETS=[{k:'0-30 días',c:'var(--cobr)',max:30},{k:'31-60 días',c:'var(--prox)',max:60},{k:'61-90 días',c:'#e0620a',max:90},{k:'+90 días',c:'var(--venc)',max:1e9}];
+const EFE_VENDEDORES=['Enrique','Winflex','Nitopi'];
+const EFE_PRODUCTOS=['Flexible','Bandejas','Lámina'];
+/* Mapa de referencia -> tipo de producto. Ajustalo si alguna ref no corresponde. */
+const EFE_REF_PROD={
+  'WP':'Flexible','WP08':'Flexible','WP10':'Flexible','WP12':'Flexible','RR':'Flexible','MARAFLEX':'Flexible','SURLYN':'Flexible',
+  'F40':'Bandejas','F41':'Bandejas','F63':'Bandejas','ENSALADERA':'Bandejas',
+  'LAMINA':'Lámina','LAMINAPET':'Lámina','PET':'Lámina'};
+function efeProdDeRef(ref){
+  let r=(ref||'').toString().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  if(!r)return '';
+  const k=r.replace(/[^A-Z0-9]/g,'');
+  if(EFE_REF_PROD[k])return EFE_REF_PROD[k];
+  if(/^WP|MARA|SURLYN|^RR/.test(k))return 'Flexible';
+  if(/^F\d|ENSALAD/.test(k))return 'Bandejas';
+  if(/LAMIN|PET/.test(k))return 'Lámina';
+  return '';
+}
+function efeVendDeCliente(nombre){
+  const m=efeList().slice().reverse().find(x=>x.cliente===nombre&&x.vendedor);
+  if(m)return m.vendedor;
+  const c=getCliente(efeLinkDe(nombre));
+  if(c&&EFE_VENDEDORES.indexOf(c.vendedor)>=0)return c.vendedor;
+  return '';
+}
+function efeVendDe(m,nombre){return m.vendedor||efeVendDeCliente(nombre||m.cliente)||''}
 const EFE_XLSX_URL='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
 const EFE_SEMILLA=[{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-03-02","importe":512000.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-04-15","importe":957000.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-05-19","importe":619500.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-06-25","importe":592000.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"WP10","fecha":"2026-07-28","importe":1020000.0,"medio":"","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"","fecha":"2026-06-18","importe":-500000.0,"medio":"Efectivo","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"","fecha":"2026-06-18","importe":-856761.31,"medio":"Cheque","nota":""},{"cliente":"ARROLLADOS ARTESANALES","ref":"","fecha":"2026-06-30","importe":-740000.0,"medio":"Cheque","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-06-29","importe":345000.0,"medio":"","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-07-01","importe":124000.0,"medio":"","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-07-06","importe":814000.0,"medio":"","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-07-14","importe":1019000.0,"medio":"","nota":""},{"cliente":"FABRICA (EX DISBELL)","ref":"","fecha":"2026-07-23","importe":96000.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-03-09","importe":12000.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-04-27","importe":28000.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-05-04","importe":43750.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-05-13","importe":42000.0,"medio":"","nota":""},{"cliente":"DISBELL","ref":"WP","fecha":"2026-05-19","importe":31500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"WP10","fecha":"2026-05-27","importe":617500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"MARAFLEX","fecha":"2026-06-18","importe":1604500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"MARAFLEX","fecha":"2026-07-16","importe":2539500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"WP10","fecha":"2026-07-27","importe":388500.0,"medio":"","nota":""},{"cliente":"EL MATACO","ref":"","fecha":"2026-07-28","importe":-617500.0,"medio":"Efectivo","nota":""},{"cliente":"ESTEROS AZULES","ref":"F40","fecha":"2026-07-03","importe":8610624.0,"medio":"","nota":""},{"cliente":"IGNACIO","ref":"WP","fecha":"2026-07-27","importe":2306000.0,"medio":"","nota":"SE ENTREGA 28/07"},{"cliente":"IGNACIO","ref":"","fecha":"2026-07-28","importe":-2306000.0,"medio":"Efectivo","nota":""},{"cliente":"KIOLLO","ref":"RR","fecha":"2026-07-07","importe":990000.0,"medio":"","nota":""},{"cliente":"KIOLLO","ref":"","fecha":"2026-07-24","importe":1117000.0,"medio":"","nota":""},{"cliente":"KIOLLO","ref":"","fecha":"2026-07-29","importe":-990000.0,"medio":"Efectivo","nota":""},{"cliente":"LEOPOLDO","ref":"","fecha":"2026-07-13","importe":1078000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-15","importe":186450.0,"medio":"","nota":"Saldo"},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-17","importe":537000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-21","importe":447000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-30","importe":273000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-06","importe":447000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-14","importe":273000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-19","importe":325800.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-28","importe":439000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-02","importe":198000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-09","importe":198000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-16","importe":273000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-19","importe":198000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-06-24","importe":396000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-07-01","importe":396000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-07-10","importe":546000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"WP","fecha":"2026-07-15","importe":185000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-22","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-04-28","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-08","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-12","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-05-19","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-06-02","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-06-03","importe":-1000000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-07-01","importe":-350000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-07-07","importe":-396000.0,"medio":"","nota":""},{"cliente":"LA VIANDA","ref":"","fecha":"2026-07-20","importe":-600000.0,"medio":"Efectivo","nota":""},{"cliente":"MAIRE NORMA CUELLAR","ref":"F40","fecha":"2026-06-18","importe":330504.0,"medio":"","nota":""},{"cliente":"MAIRE NORMA CUELLAR","ref":"","fecha":"2026-06-19","importe":-330000.0,"medio":"","nota":""},{"cliente":"MARCELO (LLAMPICO)","ref":"","fecha":"2026-07-23","importe":340000.0,"medio":"","nota":""},{"cliente":"MARCELO (LLAMPICO)","ref":"","fecha":null,"importe":-500000.0,"medio":"Transferencia","nota":""},{"cliente":"MONTI","ref":"LAMINA","fecha":"2026-07-08","importe":437920.0,"medio":"","nota":""},{"cliente":"STURNO","ref":"WP08","fecha":"2026-06-12","importe":97500.0,"medio":"","nota":""},{"cliente":"STURNO","ref":"WP08","fecha":"2026-07-10","importe":195000.0,"medio":"","nota":""},{"cliente":"TASTY FOODS","ref":"WP08","fecha":"2026-07-08","importe":585000.0,"medio":"","nota":""},{"cliente":"TASTY FOODS","ref":"WP08","fecha":"2026-07-16","importe":585000.0,"medio":"","nota":""},{"cliente":"TASTY FOODS","ref":"WP08","fecha":"2026-07-28","importe":684750.0,"medio":"","nota":""},{"cliente":"TASTY FOODS","ref":"","fecha":"2026-09-04","importe":-585000.0,"medio":"Cheque","nota":""},{"cliente":"TASTY FOODS","ref":"","fecha":"2026-09-05","importe":-585000.0,"medio":"Cheque","nota":""},{"cliente":"TASTY FOODS","ref":"","fecha":"2026-09-07","importe":-684750.0,"medio":"Cheque","nota":""},{"cliente":"GUEVINA","ref":"","fecha":"2026-07-28","importe":259500.0,"medio":"","nota":""}];
 let EFE_SEL=null, EFE_EDIT=null, EFE_IMPORT=null, EFE_CACHE=[];
 
-function mapEfectivoIn(m){return {id:m.id||uid(),cliente:(m.cliente||'').toString().trim(),ref:m.ref||'',numero:(m.numero==null?'':String(m.numero)).trim(),aplic:Array.isArray(m.aplic)?m.aplic.map(a=>({r:a.r,m:Math.round((+a.m||0)*100)/100})).filter(a=>a.r&&a.m>0):[],items:Array.isArray(m.items)?m.items.map(x=>({d:String(x.d||x.desc||''),i:Math.round((+(x.i||x.importe)||0)*100)/100})):[],fecha:(m.fecha||'').slice(0,10)||null,importe:+m.importe||0,medio:m.medio||'',nota:m.nota||'',createdAt:m.createdAt||NOW(),updatedAt:m.updatedAt||NOW()}}
+function mapEfectivoIn(m){return {id:m.id||uid(),cliente:(m.cliente||'').toString().trim(),ref:m.ref||'',numero:(m.numero==null?'':String(m.numero)).trim(),aplic:Array.isArray(m.aplic)?m.aplic.map(a=>({r:a.r,m:Math.round((+a.m||0)*100)/100})).filter(a=>a.r&&a.m>0):[],items:Array.isArray(m.items)?m.items.map(x=>({d:String(x.d||x.desc||''),i:Math.round((+(x.i||x.importe)||0)*100)/100})):[],fecha:(m.fecha||'').slice(0,10)||null,importe:+m.importe||0,medio:m.medio||'',nota:m.nota||'',
+  vendedor:EFE_VENDEDORES.indexOf(m.vendedor)>=0?m.vendedor:'',
+  producto:EFE_PRODUCTOS.indexOf(m.producto)>=0?m.producto:efeProdDeRef(m.ref),
+  entregado:(m.entregado===false?false:(m.entregado===true?true:!/(no se entreg|sin entregar|pendiente de entrega|falta entregar)/i.test(m.nota||''))),
+  fechaEntrega:(m.fechaEntrega||'').slice(0,10)||null,
+  createdAt:m.createdAt||NOW(),updatedAt:m.updatedAt||NOW()}}
 function efeList(){if(!STATE.efectivo)STATE.efectivo=[];return STATE.efectivo}
 function efeDias(f){if(!f)return 0;return Math.floor((new Date(todayISO()+'T00:00:00')-new Date(f+'T00:00:00'))/864e5)}
 function efeFuturo(m){return m.importe<0 && !!m.fecha && m.fecha>todayISO()}
@@ -1382,7 +1440,9 @@ function efeCalc(){
   efeList().forEach(m=>{const k=m.cliente||'(sin cliente)';(by[k]=by[k]||[]).push(m)});
   return Object.keys(by).map(nombre=>{
     const movs=by[nombre].slice().sort((a,b)=>(a.fecha||'0000')<(b.fecha||'0000')?-1:1);
-    const remitos=movs.filter(m=>m.importe>0);
+    const remitos=movs.filter(m=>m.importe>0&&m.entregado!==false);
+    const porEntregarMovs=movs.filter(m=>m.importe>0&&m.entregado===false);
+    const porEntregar=porEntregarMovs.reduce((s,m)=>s+m.importe,0);
     const pagos=movs.filter(m=>m.importe<0);
     const cobrados=pagos.filter(m=>!efeFuturo(m));
     const aFecha=pagos.filter(efeFuturo);
@@ -1402,7 +1462,7 @@ function efeCalc(){
     abiertos.forEach(a=>{agg[EFE_BUCKETS.findIndex(b=>a.dias<=b.max)]+=a.monto});
     const fp=cobrados.map(p=>p.fecha).filter(Boolean).sort();
     const ultPago=fp.length?fp[fp.length-1]:null;
-    return {nombre,movs,remitos,pagos,cobrados,aFecha,valores,pendiente,abiertos,agg,sinAplicar,
+    return {nombre,movs,remitos,porEntregarMovs,porEntregar,pagos,cobrados,aFecha,valores,pendiente,abiertos,agg,sinAplicar,
       aFavor:Math.max(0,porImputar),
       diasMax:abiertos.length?Math.max.apply(null,abiertos.map(a=>a.dias)):null,
       ultPago,diasSinPago:ultPago?efeDias(ultPago):null,
@@ -1421,16 +1481,20 @@ function renderEfectivo(){
   const agg=[0,0,0,0];C.forEach(c=>c.agg.forEach((v,i)=>agg[i]+=v));
   const vencido=agg[2]+agg[3];
   const abiertos=C.reduce((s,c)=>s+c.abiertos.length,0);
+  const porEntregar=C.reduce((s,c)=>s+c.porEntregar,0);
+  const nPorEnt=C.reduce((s,c)=>s+c.porEntregarMovs.length,0);
 
   $('efeKpis').innerHTML=`
     <div class="kpi por"><div class="bar"></div><div class="lab">Pendiente de cobro</div><div class="val num">${fmtM(total)}</div><div class="meta">${conSaldo.length} clientes · ${abiertos} remitos</div></div>
     <div class="kpi efe"><div class="bar"></div><div class="lab">Cubierto con valores</div><div class="val num">${fmtM(valores)}</div><div class="meta">${valores?'cheques a fecha':'sin cheques diferidos'}</div></div>
     <div class="kpi cobr"><div class="bar"></div><div class="lab">Sin cobertura</div><div class="val num">${fmtM(total-valores)}</div><div class="meta">plata que hay que salir a buscar</div></div>
-    <div class="kpi venc"><div class="bar"></div><div class="lab">Vencido +60 días</div><div class="val num" style="color:var(--venc)">${fmtM(vencido)}</div><div class="meta">${total?Math.round(vencido/total*100):0}% del pendiente</div></div>`;
+    <div class="kpi venc"><div class="bar"></div><div class="lab">Vencido +60 días</div><div class="val num" style="color:var(--venc)">${fmtM(vencido)}</div><div class="meta">${total?Math.round(vencido/total*100):0}% del pendiente</div></div>
+    <div class="kpi por"><div class="bar"></div><div class="lab">Por entregar</div><div class="val num" style="color:var(--prox)">${fmtM(porEntregar)}</div><div class="meta">${nPorEnt} remito${nPorEnt===1?'':'s'} · no suma al total</div></div>`;
 
   const al=[];
   C.filter(c=>c.valores>0).forEach(c=>al.push(`<b>${esc(c.nombre)}</b>: ${fmt(c.valores)} cancelados con cheques a ${c.aFecha.map(m=>dShow(m.fecha)).join(', ')}. Figura saldado, pero la plata todavía no entró.`));
-  C.forEach(c=>c.movs.forEach(m=>{if(/NO SE ENTREG/i.test(m.nota||''))al.push(`<b>${esc(c.nombre)}</b> — remito del ${dShow(m.fecha)} por ${fmt(m.importe)}: ${esc(m.nota.toLowerCase())}.`)}));
+  C.filter(c=>c.porEntregar>0.5).forEach(c=>al.push(`<b>${esc(c.nombre)}</b>: ${fmt(c.porEntregar)} en ${c.porEntregarMovs.length} remito(s) cargado(s) pero todavía sin entregar. No suman al total a cobrar hasta que los marques como entregados.`));
+  C.filter(c=>c.porEntregar>0.5&&c.pendiente<-0.5).forEach(c=>al.push(`<b>${esc(c.nombre)}</b> pagó por adelantado: hay ${fmt(Math.min(-c.pendiente,c.porEntregar))} cobrados de material que todavía no salió.`));
   C.filter(c=>c.pendiente<-0.5).forEach(c=>al.push(`<b>${esc(c.nombre)}</b> quedó con ${fmt(-c.pendiente)} a favor (pagó de más o falta cargar el remito).`));
   const top=C.slice().sort((a,b)=>b.pendiente-a.pendiente)[0];
   if(top&&total&&top.pendiente/total>0.3)al.push(`Concentración: <b>${esc(top.nombre)}</b> es el ${Math.round(top.pendiente/total*100)}% del pendiente (${fmt(top.pendiente)}).`);
@@ -1442,8 +1506,46 @@ function renderEfectivo(){
   $('efeAging').innerHTML=agg.map((v,i)=>`<i style="background:${EFE_BUCKETS[i].c};width:${v/sum*100}%" title="${EFE_BUCKETS[i].k}"></i>`).join('');
   $('efeChips').innerHTML=agg.map((v,i)=>`<span class="efe-chip"><b style="background:${EFE_BUCKETS[i].c}"></b>${EFE_BUCKETS[i].k} · <strong class="num">${fmt(v)}</strong> (${Math.round(v/sum*100)}%)</span>`).join('');
 
+  /* --- composición del pendiente por vendedor y por producto --- */
+  const movById={};efeList().forEach(m=>movById[m.id]=m);
+  const xv={},xp={};
+  C.forEach(c=>c.abiertos.forEach(a=>{const m=movById[a.id]||{};
+    const v=efeVendDe(m,c.nombre)||'Sin asignar', pr=m.producto||'Sin asignar';
+    xv[v]=(xv[v]||0)+a.monto; xp[pr]=(xp[pr]||0)+a.monto}));
+  function efeLineas(obj,tot){
+    const ks=Object.keys(obj).sort((a,b)=>obj[b]-obj[a]);
+    if(!ks.length)return '<div class="hint">Sin saldo pendiente.</div>';
+    return ks.map(k=>`<div class="efe-line"><span class="nm">${esc(k)}</span><span class="tr"><i style="width:${tot?Math.max(2,obj[k]/tot*100):0}%"></i></span><span class="vl num">${fmt(obj[k])}</span></div>`).join('');
+  }
+  if($('efeXVend')){$('efeXVend').innerHTML=efeLineas(xv,total);$('efeXProd').innerHTML=efeLineas(xp,total)}
+
+  /* --- filtros por vendedor / producto --- */
+  if($('efeFVend')&&$('efeFVend').options.length<=1){
+    $('efeFVend').innerHTML='<option value="">Todos los vendedores</option>'+EFE_VENDEDORES.map(v=>`<option>${v}</option>`).join('')+'<option value="__sin__">Sin asignar</option>';
+    $('efeFProd').innerHTML='<option value="">Todos los productos</option>'+EFE_PRODUCTOS.map(v=>`<option>${v}</option>`).join('')+'<option value="__sin__">Sin asignar</option>';
+  }
+  const fv=$('efeFVend')?$('efeFVend').value:'', fp=$('efeFProd')?$('efeFProd').value:'';
+  function efeOkMov(m,nombre){
+    const v=efeVendDe(m,nombre), pr=m.producto||'';
+    if(fv&&(fv==='__sin__'?!!v:v!==fv))return false;
+    if(fp&&(fp==='__sin__'?!!pr:pr!==fp))return false;
+    return true;
+  }
+  C.forEach(c=>{
+    c.filtrado=c.abiertos.reduce((s,a)=>s+(efeOkMov(movById[a.id]||{},c.nombre)?a.monto:0),0);
+    c.filtEnt=c.porEntregarMovs.reduce((s,m)=>s+(efeOkMov(m,c.nombre)?m.importe:0),0);
+  });
+  if($('efeFiltroInfo')){
+    if(fv||fp){
+      const tf=C.reduce((s,c)=>s+c.filtrado,0), te=C.reduce((s,c)=>s+c.filtEnt,0);
+      const et=[fv?(fv==='__sin__'?'sin vendedor':fv):null,fp?(fp==='__sin__'?'sin producto':fp):null].filter(Boolean).join(' · ');
+      $('efeFiltroInfo').innerHTML=`<div class="efe-filtro">Filtrando por <strong>${esc(et)}</strong> &middot; pendiente de cobro <strong class="num">${fmt(tf)}</strong>${te>0.5?` &middot; por entregar <strong class="num">${fmt(te)}</strong>`:''} <button class="mini" style="margin-left:8px" onclick="$('efeFVend').value='';$('efeFProd').value='';renderEfectivo()">Limpiar</button></div>`;
+    } else $('efeFiltroInfo').innerHTML='';
+  }
+
   const q=($('efeSearch').value||'').toLowerCase(), ord=$('efeOrden').value;
   let lista=C.filter(c=>c.nombre.toLowerCase().includes(q));
+  if(fv||fp)lista=lista.filter(c=>c.filtrado>0.5||c.filtEnt>0.5);
   lista.sort((a,b)=> ord==='nombre'?a.nombre.localeCompare(b.nombre)
     : ord==='viejo'?(b.diasMax==null?-1:b.diasMax)-(a.diasMax==null?-1:a.diasMax)
     : ord==='sinpago'?(b.diasSinPago==null?9999:b.diasSinPago)-(a.diasSinPago==null?9999:a.diasSinPago)
@@ -1461,9 +1563,13 @@ function renderEfectivo(){
         +(c.valores>0?'<span class="tag-efe w">cheques a fecha</span>':'')
         +(Math.abs(c.pendiente)<1?'<span class="tag-efe">saldado</span>':'')
         +(c.sinAplicar>0.5&&c.remitos.length?'<span class="tag-efe">pagos sin aplicar</span>':'')
+        +(c.porEntregar>0.5?'<span class="tag-efe w">por entregar</span>':'')
         +(c.oficial?'<span class="tag-efe g">en cartera</span>':'');
+      const meta=`${c.remitos.length} remitos · ${c.pagos.length} pagos`
+        +(c.porEntregar>0.5?` · <span style="color:var(--prox)">${fmt(c.porEntregar)} sin entregar</span>`:'')
+        +((fv||fp)?` · <span style="color:var(--text)">filtro ${fmt(c.filtrado)}</span>`:'');
       return `<tr class="efe-row" onclick="openEfeCli(${i})">
-        <td><span class="cli-name">${esc(c.nombre)}</span>${tags}<div class="cli-meta">${c.remitos.length} remitos · ${c.pagos.length} pagos</div></td>
+        <td><span class="cli-name">${esc(c.nombre)}</span>${tags}<div class="cli-meta">${meta}</div></td>
         <td class="r num" style="font-weight:700${c.pendiente<0?';color:var(--cobr)':''}">${fmt(c.pendiente)}</td>
         <td class="r num">${total?(Math.max(0,c.pendiente)/total*100).toFixed(1)+'%':'—'}</td>
         <td class="r num">${c.diasMax!=null?c.diasMax+' d':'—'}</td>
@@ -1486,6 +1592,13 @@ function openEfeCli(i){
     const et=m.importe>0?(m.numero?'Remito '+m.numero:(m.ref||'Remito')):(m.medio||'Pago');
     let extra='';
     if(m.importe>0&&m.numero&&m.ref)extra=`<span class="tag-efe">${esc(m.ref)}</span>`;
+    if(m.importe>0){
+      if(m.entregado===false)extra+='<span class="tag-efe w">sin entregar</span>';
+      if(m.producto)extra+=`<span class="tag-efe p">${esc(m.producto)}</span>`;
+      if(m.vendedor)extra+=`<span class="tag-efe g">${esc(m.vendedor)}</span>`;
+      else{const vv=efeVendDeCliente(c.nombre); if(vv)extra+=`<span class="tag-efe">${esc(vv)} (supuesto)</span>`}
+      if(m.entregado===false)extra+=` <button class="mini" style="margin-left:8px" onclick="event.stopPropagation();efeToggleEntrega('${m.id}')">Marcar entregado</button>`;
+    }
     if(m.importe<0){
       const ap=(m.aplic||[]);
       const nums=ap.map(a=>{const r=efeList().find(x=>x.id===a.r);return r?efeRemitoLabel(r).replace('Remito ','N\u00ba '):''}).filter(Boolean);
@@ -1507,12 +1620,22 @@ function openEfeCli(i){
       <span class="efe-chip">Remitado <strong class="num">${fmt(c.remitos.reduce((s,m)=>s+m.importe,0))}</strong></span>
       <span class="efe-chip">Cobrado <strong class="num">${fmt(c.cobrado)}</strong></span>
       ${c.valores?`<span class="efe-chip">Cheques a fecha <strong class="num">${fmt(c.valores)}</strong></span>`:''}
+      ${c.porEntregar>0.5?`<span class="efe-chip">Por entregar <strong class="num" style="color:var(--prox)">${fmt(c.porEntregar)}</strong></span>`:''}
     </div>
     <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th class="r">Importe</th><th class="r">Saldo</th></tr></thead><tbody>${filas}</tbody></table></div>
     ${c.abiertos.length?`<div class="hint"><b>Sin cobrar:</b> ${c.abiertos.map(a=>(a.numero?'N\u00ba '+a.numero+' · ':'')+dShow(a.fecha)+' · '+fmt(a.monto)+' · '+a.dias+' d').join(' — ')}</div>`:'<div class="hint">Sin saldo pendiente de cobro.</div>'}
     ${c.sinAplicar>0.5&&c.remitos.length?`<div class="efe-alert" style="margin-top:12px">Hay <b>${fmt(c.sinAplicar)}</b> en pagos que todav\u00eda no est\u00e1n aplicados a ning\u00fan remito. Se descuentan igual del saldo, pero si los aplic\u00e1s queda registrado qu\u00e9 pag\u00f3 cada uno.
       <div style="margin-top:8px"><button class="btn sm" onclick="efeImputarAuto(${JSON.stringify(c.nombre).replace(/"/g,'&quot;')})">Aplicar autom\u00e1tico, del m\u00e1s viejo al m\u00e1s nuevo</button></div></div>`:''}
+    ${c.porEntregar>0.5?`<div class="efe-alert" style="margin-top:12px"><b>${fmt(c.porEntregar)}</b> en remitos cargados que todavía no se entregaron: ${c.porEntregarMovs.map(m=>(m.numero?'Nº '+m.numero+' · ':'')+(m.fecha?dShow(m.fecha):'s/f')+' · '+fmt(m.importe)).join(' — ')}. No suman al pendiente hasta que los marques como entregados.</div>`:''}
     <div class="hint">Tocá cualquier línea para editarla.</div>
+    <div class="card" style="padding:14px;margin-top:14px;background:var(--surface2)"><h3>Vendedor y tipo de producto</h3>
+      <div class="frow">
+        <div class="field"><label>Vendedor</label><select class="filter" id="efeBulkVend"><option value="">Elegir…</option>${EFE_VENDEDORES.map(v=>`<option>${v}</option>`).join('')}</select></div>
+        <div class="field"><label>Tipo de producto</label><select class="filter" id="efeBulkProd"><option value="">Elegir…</option>${EFE_PRODUCTOS.map(v=>`<option>${v}</option>`).join('')}</select></div>
+      </div>
+      <button class="btn sm" onclick="efeBulkAsignar(false)">Asignar a los que están sin asignar</button>
+      <button class="btn ghost sm" style="margin-left:8px" onclick="efeBulkAsignar(true)">Asignar a todos</button>
+      <div class="hint">Aplica a los movimientos de este cliente. El producto sólo se asigna a los remitos.</div></div>
     <div class="card" style="padding:14px;margin-top:14px;background:var(--surface2)"><h3>Vínculo con la cartera oficial</h3>
       <div class="field">${efeLinkSelect(c.nombre)}</div>
       ${c.oficial?`<button class="btn ghost sm" onclick="closeOverlay('ovEfeCli');openCliente('${c.oficial.id}')">Editar ficha del cliente</button>`
@@ -1521,10 +1644,50 @@ function openEfeCli(i){
   openOverlay('ovEfeCli');
 }
 
+/* ---------- estado de entrega y clasificación ---------- */
+function efeToggleEntrega(id){
+  const m=efeList().find(x=>x.id===id); if(!m)return;
+  const n=EFE_SEL;
+  m.entregado=(m.entregado===false);
+  m.fechaEntrega=m.entregado?todayISO():null;
+  m.updatedAt=NOW();
+  saveToCloud();renderEfectivo();renderTotal();
+  toast(m.entregado?'Marcado como entregado':'Marcado como pendiente de entrega','ok');
+  const i=EFE_CACHE.findIndex(c=>c.nombre===n); if(i>=0)openEfeCli(i);
+}
+function efeBulkAsignar(todos){
+  const n=EFE_SEL; if(!n)return;
+  const v=$('efeBulkVend')?$('efeBulkVend').value:'', pr=$('efeBulkProd')?$('efeBulkProd').value:'';
+  if(!v&&!pr){toast('Elegí un vendedor o un producto','bad');return}
+  let k=0;
+  efeList().filter(m=>m.cliente===n).forEach(m=>{
+    let t=false;
+    if(v&&(todos||!m.vendedor)){m.vendedor=v;t=true}
+    if(pr&&m.importe>0&&(todos||!m.producto)){m.producto=pr;t=true}
+    if(t){m.updatedAt=NOW();k++}
+  });
+  if(!k){toast('No había movimientos para actualizar');return}
+  saveToCloud();renderEfectivo();renderTotal();
+  toast(k+' movimiento'+(k===1?'':'s')+' actualizado'+(k===1?'':'s'),'ok');
+  const i=EFE_CACHE.findIndex(c=>c.nombre===n); if(i>=0)openEfeCli(i);
+}
+function efeAutoVend(){
+  if(EFE_EDIT)return;
+  const cli=$('efeCliente').value.trim(); if(!cli)return;
+  if(!$('efeVend').value)$('efeVend').value=efeVendDeCliente(cli)||'';
+}
+function efeAutoProd(){
+  if($('efeTipo').value==='pago')return;
+  const g=efeProdDeRef($('efeRef').value);
+  if(g&&(!$('efeProd').value||!EFE_EDIT))$('efeProd').value=g;
+}
+
 /* ---------- alta / edición ---------- */
 function efeTipoChange(){const esPago=$('efeTipo').value==='pago';
   $('efeMedioWrap').style.display=esPago?'':'none';
   $('efeNumWrap').style.display=esPago?'none':'';
+  if($('efeProdWrap'))$('efeProdWrap').style.display=esPago?'none':'';
+  if($('efeEntWrap'))$('efeEntWrap').style.display=esPago?'none':'';
   efeRenderAplic()}
 function openEfeMov(id,cliente){
   if(!id)EFE_MOV_LINK=null;
@@ -1539,6 +1702,9 @@ function openEfeMov(id,cliente){
   $('efeRef').value=m?m.ref:'';
   $('efeNumero').value=m?(m.numero||''):efeProxNumero();
   $('efeNota').value=m?m.nota:'';
+  $('efeVend').value=m?(m.vendedor||''):(cliente?efeVendDeCliente(cliente):'');
+  $('efeProd').value=m?(m.producto||''):'';
+  $('efeEnt').value=(m&&m.entregado===false)?'0':'1';
   $('efeDelBtn').style.display=m?'':'none';
   efeTipoChange();
   if(id)closeOverlay('ovEfeCli');
@@ -1560,7 +1726,12 @@ function saveEfeMov(){
     const usa=aplic.reduce((s,a)=>s+a.m,0);
     if(usa>imp+0.5){toast('Estás aplicando más de lo que dice el importe del pago','bad');return}
   }
-  const datos={cliente:cli,fecha,importe:esPago?-imp:imp,medio:esPago?$('efeMedio').value:'',numero:esPago?'':$('efeNumero').value.trim(),aplic,ref:$('efeRef').value.trim(),nota:$('efeNota').value.trim(),updatedAt:NOW()};
+  const entregado=esPago?true:($('efeEnt').value==='1');
+  let fechaEntrega=EFE_EDIT?(EFE_EDIT.fechaEntrega||null):null;
+  if(!entregado)fechaEntrega=null;
+  else if(EFE_EDIT&&EFE_EDIT.entregado===false)fechaEntrega=todayISO();
+  const datos={cliente:cli,fecha,importe:esPago?-imp:imp,medio:esPago?$('efeMedio').value:'',numero:esPago?'':$('efeNumero').value.trim(),aplic,ref:$('efeRef').value.trim(),nota:$('efeNota').value.trim(),
+    vendedor:$('efeVend').value,producto:esPago?'':$('efeProd').value,entregado,fechaEntrega,updatedAt:NOW()};
   if(EFE_EDIT)Object.assign(EFE_EDIT,datos);
   else efeList().push(mapEfectivoIn({...datos,createdAt:NOW()}));
   if(EFE_MOV_LINK){efeLinks()[cli]=EFE_MOV_LINK;EFE_MOV_LINK=null}
@@ -1782,7 +1953,7 @@ function pintarCuenta(f){
     filasEf+=e.movs.map(m=>{acum+=m.importe;
       const fut=efeFuturo(m);
       return `<tr><td>${m.fecha?dShow(m.fecha):'s/f'}</td>
-        <td>${esc(m.importe>0?(m.ref||'Remito'):(m.medio||'Pago'))}${fut?'<span class="tag-efe w">a fecha</span>':''}${m.nota?`<span class="tag-efe">${esc(m.nota)}</span>`:''}</td>
+        <td>${esc(m.importe>0?(m.ref||'Remito'):(m.medio||'Pago'))}${fut?'<span class="tag-efe w">a fecha</span>':''}${(m.importe>0&&m.entregado===false)?'<span class="tag-efe w">sin entregar</span>':''}${(m.importe>0&&m.producto)?`<span class="tag-efe p">${esc(m.producto)}</span>`:''}${m.nota?`<span class="tag-efe">${esc(m.nota)}</span>`:''}</td>
         <td class="r num"${m.importe<0?' style="color:var(--cobr)"':''}>${fmt(m.importe)}</td>
         <td class="r num">${fmt(acum)}</td></tr>`}).join('')});
 
@@ -1972,6 +2143,7 @@ async function exportEfeExcel(){
     const total=C.reduce((s,c)=>s+Math.max(0,c.pendiente),0);
     const valores=C.reduce((s,c)=>s+c.valores,0);
     const agg=[0,0,0,0];C.forEach(c=>c.agg.forEach((v,i)=>agg[i]+=v));
+    const porEntregar=C.reduce((s,c)=>s+c.porEntregar,0);
 
     /* mapa remito -> saldo pendiente, y quién lo pagó */
     const saldoRem={}, pagoDe={};
@@ -2012,7 +2184,7 @@ async function exportEfeExcel(){
     function titulo(row,text){ws.mergeCells(`B${row}:F${row}`);const c=ws.getCell(`B${row}`);c.value=text;c.font={bold:true,size:12,color:{argb:VERDE}};c.border={bottom:{style:'medium',color:{argb:VERDE}}}}
     titulo(r,'Situación general');r+=2;
     [['Pendiente de cobro',total],['Cubierto con cheques a fecha',valores],['Sin cobertura',total-valores],
-     ['Vencido +60 días',agg[2]+agg[3]]].forEach((k,i)=>{
+     ['Vencido +60 días',agg[2]+agg[3]],['Por entregar (no suma)',porEntregar]].forEach((k,i)=>{
       const row=r+i;const lc=ws.getCell(`B${row}`);lc.value=k[0];lc.font={color:{argb:GRIS},size:11};
       const vc=ws.getCell(`C${row}`);vc.value=k[1];vc.numFmt=money;vc.alignment={horizontal:'right'};
       vc.font={bold:true,size:11,color:{argb:k[0]==='Vencido +60 días'?ROJO:'FF1B2233'}}});
@@ -2022,6 +2194,23 @@ async function exportEfeExcel(){
       const row=r+i;ws.getCell(`B${row}`).value=k;ws.getCell(`B${row}`).font={color:{argb:GRIS},size:11};
       const vc=ws.getCell(`C${row}`);vc.value=agg[i];vc.numFmt=money;vc.alignment={horizontal:'right'};vc.font={bold:true,size:11}});
     r+=6;
+    /* --- pendiente por vendedor y por tipo de producto --- */
+    const movByIdX={};efeList().forEach(m=>movByIdX[m.id]=m);
+    const xvX={},xpX={};
+    C.forEach(c=>c.abiertos.forEach(a=>{const m=movByIdX[a.id]||{};
+      const v=efeVendDe(m,c.nombre)||'Sin asignar', pr=m.producto||'Sin asignar';
+      xvX[v]=(xvX[v]||0)+a.monto; xpX[pr]=(xpX[pr]||0)+a.monto}));
+    function bloque(tit,obj){
+      titulo(r,tit);r+=2;
+      const ks=Object.keys(obj).sort((a,b)=>obj[b]-obj[a]);
+      if(!ks.length){ws.getCell(`B${r}`).value='Sin saldo pendiente';ws.getCell(`B${r}`).font={color:{argb:GRIS},size:11};r+=2;return}
+      ks.forEach((k,i)=>{const row=r+i;
+        ws.getCell(`B${row}`).value=k;ws.getCell(`B${row}`).font={color:{argb:GRIS},size:11};
+        const vc=ws.getCell(`C${row}`);vc.value=obj[k];vc.numFmt=money;vc.alignment={horizontal:'right'};vc.font={bold:true,size:11}});
+      r+=ks.length+2;
+    }
+    bloque('Pendiente por vendedor',xvX);
+    bloque('Pendiente por tipo de producto',xpX);
     titulo(r,'Saldo por cliente');r+=2;
     [['Cliente','l'],['Pendiente','r'],['Cheques a fecha','r'],['Días más viejo','r'],['Último pago','r']]
       .forEach((h,i)=>{const cell=ws.getCell(r,i+2);cell.value=h[0];cell.fill=hdrFill;cell.font=hdrFont;cell.border=box;
@@ -2035,18 +2224,19 @@ async function exportEfeExcel(){
         if(j>=3)cell.alignment={horizontal:'right'}})});
 
     /* ====== REMITOS ====== */
-    const colsR=[['Cliente',30,'l'],['Nº',10,'l'],['Fecha',12,'l'],['Ref.',12,'l'],['Importe',14,'r'],
-                 ['Cobrado',14,'r'],['Saldo',14,'r'],['Días',9,'r'],['Estado',12,'l'],['Cancelado por',42,'l'],['Detalle',46,'l'],['Observación',30,'l']];
+    const colsR=[['Cliente',30,'l'],['Nº',10,'l'],['Fecha',12,'l'],['Ref.',12,'l'],['Vendedor',14,'l'],['Producto',13,'l'],['Importe',14,'r'],
+                 ['Cobrado',14,'r'],['Saldo',14,'r'],['Días',9,'r'],['Estado',14,'l'],['Cancelado por',42,'l'],['Detalle',46,'l'],['Observación',30,'l']];
     const wr=hoja('Remitos',colsR);
     let ri=2;
     C.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre)).forEach(c=>{
-      c.remitos.slice().sort((a,b)=>(a.fecha||'')<(b.fecha||'')?-1:1).forEach(rm=>{
-        const saldo=saldoRem[rm.id]||0, cob=rm.importe-saldo;
-        const est=saldo<0.5?'Cobrado':(cob>0.5?'Parcial':'Pendiente');
-        fila(wr,ri,[c.nombre,rm.numero||'',rm.fecha?dShow(rm.fecha):'',rm.ref||'',rm.importe,cob,saldo,
-          saldo>0.5?efeDias(rm.fecha):'',est,(pagoDe[rm.id]||[]).join(' · '),
+      c.remitos.concat(c.porEntregarMovs).slice().sort((a,b)=>(a.fecha||'')<(b.fecha||'')?-1:1).forEach(rm=>{
+        const sinEnt=rm.entregado===false;
+        const saldo=sinEnt?rm.importe:(saldoRem[rm.id]||0), cob=sinEnt?0:rm.importe-saldo;
+        const est=sinEnt?'Por entregar':(saldo<0.5?'Cobrado':(cob>0.5?'Parcial':'Pendiente'));
+        fila(wr,ri,[c.nombre,rm.numero||'',rm.fecha?dShow(rm.fecha):'',rm.ref||'',efeVendDe(rm,c.nombre),rm.producto||'',rm.importe,cob,saldo,
+          (!sinEnt&&saldo>0.5)?efeDias(rm.fecha):'',est,(pagoDe[rm.id]||[]).join(' · '),
           (rm.items||[]).map(x=>x.d+' ('+fmt(x.i)+')').join(' · '),rm.nota||''],colsR);
-        if(saldo>0.5&&efeDias(rm.fecha)>60){const cell=wr.getCell(ri,8);cell.font={size:10,bold:true,color:{argb:ROJO}}}
+        if(!sinEnt&&saldo>0.5&&efeDias(rm.fecha)>60){const cell=wr.getCell(ri,10);cell.font={size:10,bold:true,color:{argb:ROJO}}}
         ri++})});
 
     /* ====== PAGOS ====== */
@@ -2171,7 +2361,7 @@ function onEfeRemitos(ev){
 
 function efeSetRto(i,campo,val){
   if(!EFE_RTOS||!EFE_RTOS[i])return;
-  EFE_RTOS[i][campo]= campo==='usar' ? !!val : val;
+  EFE_RTOS[i][campo]= (campo==='usar'||campo==='entregado') ? !!val : val;
   if(campo!=='usar')efeRenderRtos();
 }
 
@@ -2179,7 +2369,7 @@ function efeRenderRtos(){
   if(!EFE_RTOS){$('efePreview').innerHTML='';return}
   const cuentas=[...new Set(efeList().map(m=>m.cliente).concat(STATE.clientes.map(c=>c.razonSocial)))].filter(Boolean).sort();
   const filas=EFE_RTOS.map((r,i)=>{
-    if(r.error)return `<tr><td colspan="6" style="color:var(--venc)">${esc(r.archivo)} — ${esc(r.error)}</td></tr>`;
+    if(r.error)return `<tr><td colspan="7" style="color:var(--venc)">${esc(r.archivo)} — ${esc(r.error)}</td></tr>`;
     const dup=efeList().some(m=>m.importe>0&&String(m.numero)===String(r.numero)&&m.numero);
     const nueva=!cuentas.some(c=>c===r.cuenta);
     const avisos=[dup?'<span class="tag-efe w">Nº repetido</span>':'',
@@ -2194,6 +2384,9 @@ function efeRenderRtos(){
       <td>${r.fecha?dShow(r.fecha):'—'}</td>
       <td><select class="filter" style="max-width:210px" onchange="efeSetRto(${i},'cuenta',this.value)">${ops}</select>${avisos}</td>
       <td class="r num" style="font-weight:700">${fmt(r.total)}</td>
+      <td><select class="filter" style="max-width:150px" onchange="efeSetRto(${i},'entregado',this.value==='1')">
+        <option value="1"${r.entregado===false?'':' selected'}>Entregado</option>
+        <option value="0"${r.entregado===false?' selected':''}>Sin entregar</option></select></td>
       <td class="cli-meta">${esc(r.items.map(x=>x.d).join(' · '))}</td></tr>`;
   }).join('');
   const ok=EFE_RTOS.filter(r=>!r.error&&r.usar);
@@ -2204,7 +2397,7 @@ function efeRenderRtos(){
       <span class="efe-chip">A cargar <strong class="num">${ok.length}</strong></span>
       <span class="efe-chip">Total <strong class="num">${fmt(suma)}</strong></span>
     </div>
-    <div class="tablewrap"><table><thead><tr><th style="width:34px"></th><th>N&ordm;</th><th>Fecha</th><th>Cliente</th><th class="r">Importe</th><th>Detalle</th></tr></thead><tbody>${filas}</tbody></table></div>
+    <div class="tablewrap"><table><thead><tr><th style="width:34px"></th><th>N&ordm;</th><th>Fecha</th><th>Cliente</th><th class="r">Importe</th><th>Entrega</th><th>Detalle</th></tr></thead><tbody>${filas}</tbody></table></div>
     <div style="margin-top:12px">
       <button class="btn sm" onclick="cargarEfeRtos()">Cargar ${ok.length} remito${ok.length===1?'':'s'}</button>
       <button class="btn ghost sm" style="margin-left:8px" onclick="EFE_RTOS=null;efeRenderRtos()">Cancelar</button>
@@ -2220,7 +2413,8 @@ function cargarEfeRtos(){
   if(dups.length&&!confirm('Hay '+dups.length+' remito(s) con un número que ya está cargado (Nº '+dups.map(r=>r.numero).join(', ')+').\n\n¿Cargarlos igual?'))return;
   ok.forEach(r=>{
     efeList().push(mapEfectivoIn({cliente:r.cuenta,numero:r.numero,fecha:r.fecha,
-      importe:r.total,ref:'',items:r.items,nota:'',createdAt:NOW()}));
+      importe:r.total,ref:'',items:r.items,nota:'',vendedor:efeVendDeCliente(r.cuenta),
+      producto:'',entregado:r.entregado!==false,createdAt:NOW()}));
   });
   EFE_RTOS=null;$('efePreview').innerHTML='';
   saveToCloud();renderEfectivo();renderTotal();
