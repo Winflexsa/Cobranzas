@@ -248,6 +248,9 @@ body.modo-modulo nav{display:none}
   .tag-efe.g{border-color:var(--cobr);color:var(--cobr)}
   .kpi.efe .bar{background:#7a5cd0}
   .efe-row{cursor:pointer}
+  td.c,th.c{text-align:center}
+  .efe-chk{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:4px}
+  .efe-chk input{width:20px;height:20px;accent-color:var(--cobr);cursor:pointer}
   .kpis.k5{grid-template-columns:repeat(5,1fr)}
   .tag-efe.p{border-color:#7a5cd0;color:#7a5cd0}
   .efe-split{display:grid;grid-template-columns:1fr 1fr;gap:22px}
@@ -1597,7 +1600,6 @@ function openEfeCli(i){
       if(m.producto)extra+=`<span class="tag-efe p">${esc(m.producto)}</span>`;
       if(m.vendedor)extra+=`<span class="tag-efe g">${esc(m.vendedor)}</span>`;
       else{const vv=efeVendDeCliente(c.nombre); if(vv)extra+=`<span class="tag-efe">${esc(vv)} (supuesto)</span>`}
-      if(m.entregado===false)extra+=` <button class="mini" style="margin-left:8px" onclick="event.stopPropagation();efeToggleEntrega('${m.id}')">Marcar entregado</button>`;
     }
     if(m.importe<0){
       const ap=(m.aplic||[]);
@@ -1611,7 +1613,8 @@ function openEfeCli(i){
       <td>${m.fecha?dShow(m.fecha):'s/f'}</td>
       <td>${esc(et)}${fut?'<span class="tag-efe w">a fecha</span>':''}${extra}${m.nota?`<span class="tag-efe">${esc(m.nota)}</span>`:''}</td>
       <td class="r num"${m.importe<0?' style="color:var(--cobr)"':''}>${fmt(m.importe)}</td>
-      <td class="r num">${fmt(acum)}</td></tr>${(m.items&&m.items.length)?`<tr><td></td><td colspan="3" class="cli-meta" style="padding-top:0">${esc(m.items.map(x=>x.d+' · '+fmt(x.i)).join('  |  '))}</td></tr>`:''}`}).join('');
+      <td class="r num">${fmt(acum)}</td>
+      <td class="c" onclick="event.stopPropagation()">${m.importe>0?`<label class="efe-chk" title="Destildá si todavía no se entregó"><input type="checkbox" ${m.entregado===false?'':'checked'} onchange="efeToggleEntrega('${m.id}')"></label>`:''}</td></tr>${(m.items&&m.items.length)?`<tr><td></td><td colspan="4" class="cli-meta" style="padding-top:0">${esc(m.items.map(x=>x.d+' · '+fmt(x.i)).join('  |  '))}</td></tr>`:''}`}).join('');
   const ofi=c.oficial?`<div class="efe-alert ok" style="margin-bottom:14px">En cartera oficial como <b>${esc(c.oficial.razonSocial)}</b> · saldo facturado ${fmt(saldoCliente(c.oficial.id))} · <b>total combinado ${fmt(saldoCliente(c.oficial.id)+Math.max(0,c.pendiente))}</b></div>`
     :`<div class="hint" style="margin-bottom:14px">No está en la cartera oficial: sólo tiene remitos internos.</div>`;
   $('efeCliBody').innerHTML=`${ofi}
@@ -1622,12 +1625,12 @@ function openEfeCli(i){
       ${c.valores?`<span class="efe-chip">Cheques a fecha <strong class="num">${fmt(c.valores)}</strong></span>`:''}
       ${c.porEntregar>0.5?`<span class="efe-chip">Por entregar <strong class="num" style="color:var(--prox)">${fmt(c.porEntregar)}</strong></span>`:''}
     </div>
-    <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th class="r">Importe</th><th class="r">Saldo</th></tr></thead><tbody>${filas}</tbody></table></div>
+    <div class="tablewrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th class="r">Importe</th><th class="r">Saldo</th><th class="c">Entregado</th></tr></thead><tbody>${filas}</tbody></table></div>
     ${c.abiertos.length?`<div class="hint"><b>Sin cobrar:</b> ${c.abiertos.map(a=>(a.numero?'N\u00ba '+a.numero+' · ':'')+dShow(a.fecha)+' · '+fmt(a.monto)+' · '+a.dias+' d').join(' — ')}</div>`:'<div class="hint">Sin saldo pendiente de cobro.</div>'}
     ${c.sinAplicar>0.5&&c.remitos.length?`<div class="efe-alert" style="margin-top:12px">Hay <b>${fmt(c.sinAplicar)}</b> en pagos que todav\u00eda no est\u00e1n aplicados a ning\u00fan remito. Se descuentan igual del saldo, pero si los aplic\u00e1s queda registrado qu\u00e9 pag\u00f3 cada uno.
       <div style="margin-top:8px"><button class="btn sm" onclick="efeImputarAuto(${JSON.stringify(c.nombre).replace(/"/g,'&quot;')})">Aplicar autom\u00e1tico, del m\u00e1s viejo al m\u00e1s nuevo</button></div></div>`:''}
     ${c.porEntregar>0.5?`<div class="efe-alert" style="margin-top:12px"><b>${fmt(c.porEntregar)}</b> en remitos cargados que todavía no se entregaron: ${c.porEntregarMovs.map(m=>(m.numero?'Nº '+m.numero+' · ':'')+(m.fecha?dShow(m.fecha):'s/f')+' · '+fmt(m.importe)).join(' — ')}. No suman al pendiente hasta que los marques como entregados.</div>`:''}
-    <div class="hint">Tocá cualquier línea para editarla.</div>
+    <div class="hint">Tocá cualquier línea para editarla. La tilde de la derecha marca si el material ya se entregó: destildala y ese remito deja de sumar al pendiente.</div>
     <div class="card" style="padding:14px;margin-top:14px;background:var(--surface2)"><h3>Vendedor y tipo de producto</h3>
       <div class="frow">
         <div class="field"><label>Vendedor</label><select class="filter" id="efeBulkVend"><option value="">Elegir…</option>${EFE_VENDEDORES.map(v=>`<option>${v}</option>`).join('')}</select></div>
