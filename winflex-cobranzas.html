@@ -387,7 +387,7 @@ body.modo-modulo nav{display:none}
       <button class="btn sm" onclick="openEfeMov()">+ Movimiento</button>
       <label class="btn sm" style="display:inline-flex;align-items:center;gap:4px"><input type="file" accept=".xlsx,.xls" multiple hidden onchange="onEfeRemitos(event)">&#128196; Subir remitos</label>
       <label class="btn ghost sm" style="display:inline-flex;align-items:center;gap:4px"><input type="file" accept=".xlsx,.xls" hidden onchange="onEfeExcel(event)">&uarr; Importar Excel</label>
-      <button class="btn sm" onclick="exportEfeExcel()">&#128202; Informe</button>
+      <button class="btn sm" id="efeBtnInf" onclick="exportEfeExcel()">&#128202; Informe</button>
       <button class="btn ghost sm" onclick="openCom()">% Comisiones</button>
       <button class="btn ghost sm" onclick="exportEfeJSON()">&darr; Respaldo</button>
     </div>
@@ -396,7 +396,7 @@ body.modo-modulo nav{display:none}
     <div class="tablewrap"><table>
       <thead><tr><th>Cliente</th><th class="r" id="efeThPend">Pendiente</th><th class="r">%</th><th class="r">D&iacute;as m&aacute;x.</th><th class="r">&Uacute;lt. pago</th><th>Antig&uuml;edad</th></tr></thead>
       <tbody id="efeBody"></tbody></table></div>
-    <div class="hint">Tocá un cliente para ver sus remitos y pagos. Los cheques con fecha futura no cancelan la antigüedad: figuran aparte como cubierto con valores.</div>
+    <div class="hint">Tocá un cliente para ver sus remitos y pagos. El cheque a fecha se toma como cobrado desde que lo cargás y figura aparte en “Cheques a fecha”; si rebota, marcalo como rechazado y vuelve a ser deuda. Los filtros de vendedor y producto también salen aplicados en el informe.</div>
   </section>
 
   <!-- CUENTA TOTAL (oficial + efectivo) -->
@@ -1593,6 +1593,9 @@ function renderEfectivo(){
   }
 
   if($('efeThPend'))$('efeThPend').textContent=(fv||fp)?'Pendiente (filtro)':'Pendiente';
+  if($('efeBtnInf')){const et=efeFiltro().etiqueta;
+    $('efeBtnInf').innerHTML='\uD83D\uDCCA Informe'+(et?' · '+esc(et):'');
+    $('efeBtnInf').title=et?'El informe sale sólo con '+et:'El informe sale con todo. Filtrá arriba por vendedor o producto para individualizarlo.'}
   const q=($('efeSearch').value||'').toLowerCase(), ord=$('efeOrden').value;
   let lista=C.filter(c=>c.nombre.toLowerCase().includes(q));
   if(fv||fp)lista=lista.filter(c=>c.filtrado>0.5||c.filtEnt>0.5);
@@ -2334,6 +2337,45 @@ function efeImputarAuto(nombre){
 }
 
 
+/* ---------- filtro activo (vendedor / tipo de producto) ---------- */
+function efeFiltro(){
+  const v=$('efeFVend')?$('efeFVend').value:'', p=$('efeFProd')?$('efeFProd').value:'';
+  const et=[v?(v==='__sin__'?'sin vendedor':v):null,p?(p==='__sin__'?'sin producto':p):null].filter(Boolean).join(' · ');
+  return {v,p,activo:!!(v||p),etiqueta:et};
+}
+function efeMovPasa(m,nombre,f){
+  if(!f.activo)return true;
+  const v=efeVendDe(m,nombre), pr=m.producto||'';
+  if(f.v&&(f.v==='__sin__'?!!v:v!==f.v))return false;
+  if(f.p&&(f.p==='__sin__'?!!pr:pr!==f.p))return false;
+  return true;
+}
+/* Recorta el cálculo a los remitos que pasan el filtro: los pagos entran por lo
+   que tienen imputado a esos remitos. */
+function efeVista(C,f){
+  if(!f.activo)return C;
+  const byId={};efeList().forEach(m=>byId[m.id]=m);
+  return C.map(c=>{
+    const ok=m=>efeMovPasa(m,c.nombre,f);
+    const remitos=c.remitos.filter(ok);
+    const porEntregarMovs=c.porEntregarMovs.filter(ok);
+    const ids=new Set(remitos.map(r=>r.id));
+    const abiertos=c.abiertos.filter(a=>ids.has(a.id));
+    const pagos=c.pagos.filter(p=>(p.aplic||[]).some(a=>ids.has(a.r)));
+    const impDe=p=>(p.aplic||[]).filter(a=>ids.has(a.r)).reduce((s,a)=>s+a.m,0);
+    const pendiente=abiertos.reduce((s,a)=>s+a.monto,0);
+    const valores=pagos.filter(p=>efeFuturo(p)&&p.chequeOk!==true&&p.chequeOk!==false).reduce((s,p)=>s+impDe(p),0);
+    const agg=[0,0,0,0,0];
+    abiertos.forEach(a=>{agg[a.dias==null?EFE_SF:EFE_BUCKETS.findIndex(b=>b.max!=null&&a.dias<=b.max)]+=a.monto});
+    const movs=remitos.concat(porEntregarMovs).concat(pagos).sort((a,b)=>(a.fecha||'0000')<(b.fecha||'0000')?-1:1);
+    const d=abiertos.map(a=>a.dias).filter(x=>x!=null);
+    return {...c,remitos,porEntregarMovs,porEntregar:porEntregarMovs.reduce((s,m)=>s+m.importe,0),
+      abiertos,pagos,pendiente,valores,agg,movs,impDe,
+      cobrado:remitos.reduce((s,r)=>s+r.importe,0)-pendiente,
+      diasMax:d.length?Math.max.apply(null,d):null};
+  }).filter(c=>c.remitos.length||c.porEntregarMovs.length);
+}
+
 /* ---------- informe Excel de efectivo ---------- */
 async function exportEfeExcel(){
   try{
@@ -2348,7 +2390,9 @@ async function exportEfeExcel(){
     const wb=new ExcelJS.Workbook();
     wb.creator='Winflex S.A.';wb.created=new Date();
 
-    const C=efeCalc();
+    const F=efeFiltro();
+    const C=efeVista(efeCalc(),F);
+    if(!C.length){toast('El filtro no deja ningún remito para informar','bad');return}
     const total=C.reduce((s,c)=>s+Math.max(0,c.pendiente),0);
     const valores=C.reduce((s,c)=>s+c.valores,0);
     const agg=[0,0,0,0,0];C.forEach(c=>c.agg.forEach((v,i)=>agg[i]+=v));
@@ -2358,7 +2402,9 @@ async function exportEfeExcel(){
     const saldoRem={}, pagoDe={};
     C.forEach(c=>{
       c.abiertos.forEach(a=>saldoRem[a.id]=a.monto);
+      const idsC=new Set(c.remitos.map(x=>x.id));
       c.pagos.forEach(p=>(p.aplic||[]).forEach(a=>{
+        if(F.activo&&!idsC.has(a.r))return;
         (pagoDe[a.r]=pagoDe[a.r]||[]).push((p.fecha?dShow(p.fecha):'s/f')+' '+(p.medio||'pago')+' '+fmt(a.m));
       }));
     });
@@ -2385,12 +2431,15 @@ async function exportEfeExcel(){
     ws.columns=[{width:3},{width:30},{width:16},{width:16},{width:16},{width:16},{width:4}];
     try{const logoId=wb.addImage({base64:'data:image/png;base64,'+LOGO_B64,extension:'png'});
       ws.addImage(logoId,{tl:{col:1,row:0},ext:{width:176,height:100}});}catch(e){}
-    ws.mergeCells('D2:F2');const t1=ws.getCell('D2');t1.value='EFECTIVO · REMITOS INTERNOS';t1.font={bold:true,size:16,color:{argb:VERDE}};t1.alignment={horizontal:'right',vertical:'middle'};
+    ws.mergeCells('D2:F2');const t1=ws.getCell('D2');t1.value='EFECTIVO · REMITOS INTERNOS'+(F.activo?' · '+F.etiqueta.toUpperCase():'');t1.font={bold:true,size:16,color:{argb:VERDE}};t1.alignment={horizontal:'right',vertical:'middle'};
     ws.mergeCells('D3:F3');const t2=ws.getCell('D3');t2.value='Winflex S.A. · Envases Especiales';t2.font={size:11,color:{argb:GRIS}};t2.alignment={horizontal:'right'};
     ws.mergeCells('D4:F4');const t3=ws.getCell('D4');t3.value='Generado el '+dShow(todayISO())+(CURRENT_USER?' · '+CURRENT_USER:'');t3.font={size:10,italic:true,color:{argb:GRIS}};t3.alignment={horizontal:'right'};
 
     let r=7;
     function titulo(row,text){ws.mergeCells(`B${row}:F${row}`);const c=ws.getCell(`B${row}`);c.value=text;c.font={bold:true,size:12,color:{argb:VERDE}};c.border={bottom:{style:'medium',color:{argb:VERDE}}}}
+    if(F.activo){ws.mergeCells(`B${r}:F${r}`);const fc=ws.getCell(`B${r}`);
+      fc.value='Informe filtrado por '+F.etiqueta+' — sólo los remitos que cumplen el filtro y los pagos imputados a esos remitos.';
+      fc.font={bold:true,size:11,color:{argb:ROJO}};r+=2}
     titulo(r,'Situación general');r+=2;
     [['Pendiente de cobro',total],['Cheques a fecha (ya descontados)',valores],['Sin entrar todavía',total+valores],
      ['Vencido +60 días',agg[2]+agg[3]],['Por entregar (no suma)',porEntregar]].forEach((k,i)=>{
@@ -2468,17 +2517,45 @@ async function exportEfeExcel(){
     C.slice().sort((a,b)=>a.nombre.localeCompare(b.nombre)).forEach(c=>{
       let acum=0;
       c.movs.forEach(m=>{
-        acum+=m.importe;
+        const haber=m.importe<0?((F.activo&&c.impDe)?c.impDe(m):-m.importe):0;
+        acum+=(m.importe>0?m.importe:-haber);
         const con=m.importe>0?(m.numero?'Remito Nº '+m.numero:(m.ref||'Remito')):((m.medio||'Pago')+(efeFuturo(m)?' a fecha':''));
-        fila(wm,mi,[c.nombre,m.fecha?dShow(m.fecha):'s/f',con,m.importe>0?m.importe:'',m.importe<0?-m.importe:'',acum,m.nota||''],colsM);
+        fila(wm,mi,[c.nombre,m.fecha?dShow(m.fecha):'s/f',con,m.importe>0?m.importe:'',haber||'',acum,m.nota||''],colsM);
         mi++});
       const cell=wm.getCell(mi,3);cell.value='Saldo '+c.nombre;cell.font={bold:true,size:10,color:{argb:VERDE}};
       const cs=wm.getCell(mi,6);cs.value=c.pendiente;cs.numFmt=money;cs.alignment={horizontal:'right'};
       cs.font={bold:true,color:{argb:VERDE}};cs.border={top:{style:'double',color:{argb:VERDE}}};
       mi+=2});
 
+    /* ====== POR VENDEDOR Y PRODUCTO ====== */
+    const colsX=[['Vendedor',18,'l'],['Tipo de producto',18,'l'],['Remitos',10,'r'],['Clientes',10,'r'],
+                 ['Remitado',16,'r'],['Cobrado',16,'r'],['Pendiente',16,'r'],['Vencido +60',16,'r']];
+    const wx=hoja('Por vendedor y producto',colsX);
+    const pivot={};
+    C.forEach(c=>{
+      const sal={};c.abiertos.forEach(a=>sal[a.id]=a.monto);
+      c.remitos.forEach(rm=>{
+        const k=(efeVendDe(rm,c.nombre)||'Sin asignar')+'||'+(rm.producto||'Sin asignar');
+        const x=pivot[k]=pivot[k]||{v:k.split('||')[0],p:k.split('||')[1],q:0,cli:new Set(),rem:0,cob:0,pen:0,ven:0};
+        const sd=sal[rm.id]||0, dd=efeDias(rm.fecha);
+        x.q++;x.cli.add(c.nombre);x.rem+=rm.importe;x.cob+=rm.importe-sd;x.pen+=sd;
+        if(sd>0.5&&dd!=null&&dd>60)x.ven+=sd;
+      });
+    });
+    const pk=Object.keys(pivot).sort((a,b)=>pivot[b].pen-pivot[a].pen);
+    let xi=2;
+    pk.forEach(k=>{const x=pivot[k];fila(wx,xi,[x.v,x.p,x.q,x.cli.size,x.rem,x.cob,x.pen,x.ven],colsX);xi++});
+    if(pk.length){
+      const tt=['TOTAL','',pk.reduce((s,k)=>s+pivot[k].q,0),'',
+        pk.reduce((s,k)=>s+pivot[k].rem,0),pk.reduce((s,k)=>s+pivot[k].cob,0),
+        pk.reduce((s,k)=>s+pivot[k].pen,0),pk.reduce((s,k)=>s+pivot[k].ven,0)];
+      tt.forEach((v,i)=>{const cell=wx.getCell(xi,i+1);cell.value=v;
+        if(typeof v==='number'){cell.numFmt=money;cell.alignment={horizontal:'right'}}
+        cell.font={bold:true,color:{argb:VERDE}};cell.border={top:{style:'double',color:{argb:VERDE}}}});
+    }
+
     /* ====== CUENTA TOTAL ====== */
-    const filasT=totCalc(true);
+    const filasT=F.activo?[]:totCalc(true);
     if(filasT.length){
       const colsT=[['Cliente',32,'l'],['Cobranza oficial',16,'r'],['Vencido oficial',16,'r'],
                    ['Efectivo',16,'r'],['Cheques a fecha',16,'r'],['Total',16,'r']];
@@ -2495,8 +2572,9 @@ async function exportEfeExcel(){
     const buf=await wb.xlsx.writeBuffer();
     const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-    a.download='Informe-Efectivo-Winflex-'+todayISO()+'.xlsx';a.click();
-    toast('Informe descargado','ok');
+    const suf=F.activo?('-'+F.etiqueta.replace(/[^A-Za-z0-9]+/g,'-')):'';
+    a.download='Informe-Efectivo-Winflex'+suf+'-'+todayISO()+'.xlsx';a.click();
+    toast('Informe descargado'+(F.activo?' · '+F.etiqueta:''),'ok');
   }catch(e){toast('Error al generar el informe: '+e.message,'bad')}
 }
 
