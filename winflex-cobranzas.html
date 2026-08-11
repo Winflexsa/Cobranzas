@@ -595,6 +595,13 @@ body.modo-modulo nav{display:none}
 
 <div class="toast" id="toast"></div>
 
+<!-- MODAL RESUMEN (privado) -->
+<div class="overlay" id="ovNit"><div class="modal" style="max-width:760px">
+  <header><h2>Resumen</h2><button class="x" onclick="closeOverlay('ovNit')">&times;</button></header>
+  <div class="body" id="nitBody"></div>
+  <div class="foot"><button class="btn ghost" onclick="nitCSV()">&darr; Descargar CSV</button><button class="btn ghost" onclick="closeOverlay('ovNit')">Cerrar</button></div>
+</div></div>
+
 <script>
 if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
@@ -1452,6 +1459,12 @@ function efeMatchOficial(nombre){
       || null;
 }
 
+/* Comisión del vendedor: la plata llega neta, así que cada peso cobrado sobre un
+   remito suyo cancela 1/(1-pct) de deuda. No se muestra en ningún lado. */
+const NIT_PCT = 0.05;
+const NIT_VEND = 'Nitopi';
+function nitFactor(v){return v===NIT_VEND?1/(1-NIT_PCT):1}
+
 /* ---------- cálculo ---------- */
 function efeCalc(){
   const hoy=todayISO(), by={};
@@ -1471,15 +1484,17 @@ function efeCalc(){
     let porImputar=cobrados.reduce((s,m)=>s-m.importe,0);
     const apl={};
     const entregadosSet=new Set(movs.filter(m=>m.importe>0&&m.entregado!==false).map(m=>m.id));
-    cobrados.forEach(p=>(p.aplic||[]).forEach(a=>{if(!entregadosSet.has(a.r))return;apl[a.r]=(apl[a.r]||0)+a.m;porImputar-=a.m}));
+    const facR={};movs.forEach(m=>{if(m.importe>0)facR[m.id]=nitFactor(efeVendDe(m,nombre))});
+    cobrados.forEach(p=>(p.aplic||[]).forEach(a=>{if(!entregadosSet.has(a.r))return;apl[a.r]=(apl[a.r]||0)+a.m*(facR[a.r]||1);porImputar-=a.m}));
     porImputar=Math.max(0,porImputar);
     const sinAplicar=cobrados.reduce((s,p)=>s+Math.max(0,-p.importe-(p.aplic||[]).reduce((x,a)=>x+a.m,0)),0);
     const abiertos=[];
     remitos.forEach(r=>{let resto=Math.max(0,r.importe-(apl[r.id]||0));
-      const usa=Math.min(resto,porImputar);porImputar-=usa;resto-=usa;
+      const fr=facR[r.id]||1;
+      const usa=Math.min(resto/fr,porImputar);porImputar-=usa;resto-=usa*fr;
       if(resto>0.5)abiertos.push({id:r.id,numero:r.numero,fecha:r.fecha,monto:resto,dias:efeDias(r.fecha),ref:r.ref,explicito:!!apl[r.id]})});
-    const pendiente=remitos.reduce((s,m)=>s+m.importe,0)-cobrados.reduce((s,m)=>s-m.importe,0);
-    const valores=aFecha.reduce((s,m)=>s-m.importe,0);
+    const pendiente=abiertos.reduce((s,a)=>s+a.monto,0)-porImputar;
+    const valores=aFecha.reduce((s,m)=>s-m.importe*nitFactor(efeVendDe(m,nombre)),0);
     const agg=[0,0,0,0,0];
     abiertos.forEach(a=>{agg[a.dias==null?EFE_SF:EFE_BUCKETS.findIndex(b=>b.max!=null&&a.dias<=b.max)]+=a.monto});
     const fp=cobrados.map(p=>p.fecha).filter(Boolean).sort();
@@ -2511,6 +2526,129 @@ function cargarEfeRtos(){
   saveToCloud();renderEfectivo();renderTotal();
   toast(ok.length+' remito'+(ok.length===1?'':'s')+' cargado'+(ok.length===1?'':'s'),'ok');
 }
+
+
+/* ================= comisiones (privado) =================
+   3 toques en el logo del encabezado + c\u00f3digo. No aparece en el men\u00fa. */
+const NIT_KEY = '2580';      // <<< tu c\u00f3digo
+let NIT_OK = false, NIT_TAPS = [], NIT_MES = '';
+
+function nitMes(f){return (f||'').slice(0,7)}
+function nitMesShow(k){return (!k||k==='sin fecha')?'Sin fecha':k.slice(5)+'/'+k.slice(0,4)}
+function nitR2(n){return Math.round((+n||0)*100)/100}
+
+/* Un remito es de Nitopi si tiene el vendedor cargado o si el cliente es de \u00e9l. */
+function nitDatos(){
+  const rows=[];
+  efeCalc().forEach(c=>{
+    const ab={};c.abiertos.forEach(a=>ab[a.id]=a.monto);
+    c.movs.forEach(m=>{
+      if(!(m.importe>0))return;
+      if(efeVendDe(m,c.nombre)!==NIT_VEND)return;
+      const ent=m.entregado!==false;
+      const saldo=Math.max(0,Math.min(m.importe,ent?(ab[m.id]||0):m.importe));
+      const cob=nitR2(m.importe-saldo);
+      rows.push({cliente:c.nombre,fecha:m.fecha||'',numero:m.numero||'',ref:m.ref||'',
+        base:m.importe,ent:ent,
+        cob:cob,                              // cobrado al cliente (bruto)
+        real:nitR2(cob*(1-NIT_PCT)),          // lo que entr\u00f3 a la empresa
+        com:nitR2(cob*NIT_PCT),               // comisi\u00f3n ya retenida por Nitopi
+        saldo:saldo,                          // lo que el cliente todav\u00eda debe
+        saldoNeto:nitR2(saldo*(1-NIT_PCT)),   // lo que te va a entrar
+        comPend:nitR2(saldo*NIT_PCT)});       // comisi\u00f3n a devengar
+    });
+  });
+  rows.sort((a,b)=>(a.fecha||'0000')<(b.fecha||'0000')?1:-1);
+  return rows;
+}
+function nitFiltradas(){return nitDatos().filter(r=>!NIT_MES||nitMes(r.fecha)===NIT_MES)}
+
+function nitRender(){
+  const todas=nitDatos(), fil=nitFiltradas();
+  const ent=fil.filter(r=>r.ent);
+  const S=(a,k)=>a.reduce((s,r)=>s+r[k],0);
+  const meses=[...new Set(todas.map(r=>nitMes(r.fecha)).filter(Boolean))].sort().reverse();
+  if(NIT_MES&&meses.indexOf(NIT_MES)<0)NIT_MES='';
+
+  const porMes={};
+  todas.filter(r=>r.ent).forEach(r=>{const k=nitMes(r.fecha)||'sin fecha';
+    porMes[k]=porMes[k]||{base:0,real:0,com:0,saldo:0,n:0};
+    porMes[k].base+=r.base;porMes[k].real+=r.real;porMes[k].com+=r.com;porMes[k].saldo+=r.saldo;porMes[k].n++});
+  const porCli={};
+  ent.forEach(r=>{porCli[r.cliente]=porCli[r.cliente]||{base:0,real:0,com:0,saldoNeto:0,comPend:0,n:0};
+    const v=porCli[r.cliente];v.base+=r.base;v.real+=r.real;v.com+=r.com;v.saldoNeto+=r.saldoNeto;v.comPend+=r.comPend;v.n++});
+
+  const th='style="text-align:left;padding:7px 8px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px"';
+  const thr=th.replace('text-align:left','text-align:right');
+  const td='style="padding:7px 8px;border-bottom:1px solid var(--border)"';
+  const tdr='style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right"';
+  const tabla=h=>'<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:18px">'+h+'</table>';
+  const opts=['<option value="">Todos los meses</option>']
+    .concat(meses.map(m=>`<option value="${m}"${NIT_MES===m?' selected':''}>${nitMesShow(m)}</option>`)).join('');
+
+  const sinEnt=fil.filter(r=>!r.ent);
+  const filasMes=Object.keys(porMes).sort().reverse().map(k=>{const v=porMes[k];
+    return `<tr><td ${td}>${nitMesShow(k)}</td><td ${tdr}>${v.n}</td><td ${tdr}>${fmt(v.base)}</td>`+
+      `<td ${tdr}>${fmt(v.real)}</td><td ${tdr}><strong>${fmt(v.com)}</strong></td>`+
+      `<td ${tdr}>${v.saldo?fmt(v.saldo):'\u2014'}</td></tr>`}).join('');
+  const filasCli=Object.keys(porCli).sort((a,b)=>porCli[b].com-porCli[a].com).map(k=>{const v=porCli[k];
+    return `<tr><td ${td}>${esc(k)}</td><td ${tdr}>${v.n}</td><td ${tdr}>${fmt(v.base)}</td>`+
+      `<td ${tdr}>${fmt(v.real)}</td><td ${tdr}><strong>${fmt(v.com)}</strong></td>`+
+      `<td ${tdr}>${v.saldoNeto?fmt(v.saldoNeto):'\u2014'}</td></tr>`}).join('');
+  const filasDet=fil.map(r=>`<tr><td ${td}>${dShow(r.fecha)}</td><td ${td}>${esc(r.cliente)}</td>`+
+    `<td ${td}>${esc(r.numero)||'\u2014'}</td><td ${tdr}>${fmt(r.base)}</td>`+
+    `<td ${tdr}>${r.cob?fmt(r.real):'\u2014'}</td><td ${tdr}><strong>${r.com?fmt(r.com):'\u2014'}</strong></td>`+
+    `<td ${tdr}>${r.saldo?fmt(r.saldoNeto):'\u2014'}</td>`+
+    `<td ${td}>${r.ent?(r.saldo?(r.cob?'parcial':'abierto'):'cobrado'):'<span style="color:var(--prox)">sin entregar</span>'}</td></tr>`).join('');
+
+  $('nitBody').innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">
+      <div class="kpi"><div class="lab">Te rindi\u00f3 Nitopi</div><div class="val num">${fmt(S(ent,'real'))}</div><div class="meta">neto de ${fmt(S(ent,'base'))} vendidos \u00b7 ${ent.length} remito${ent.length===1?'':'s'}</div></div>
+      <div class="kpi"><div class="lab">Se qued\u00f3 de comisi\u00f3n (${(NIT_PCT*100)}%)</div><div class="val num">${fmt(S(ent,'com'))}</div><div class="meta">sobre lo que ya rindi\u00f3</div></div>
+      <div class="kpi"><div class="lab">Falta que te rinda (neto)</div><div class="val num" style="color:var(--prox)">${fmt(S(ent,'saldoNeto'))}</div><div class="meta">los clientes deben ${fmt(S(ent,'saldo'))}</div></div>
+      <div class="kpi"><div class="lab">Comisi\u00f3n pendiente</div><div class="val num">${fmt(S(ent,'comPend'))}</div><div class="meta">se la lleva cuando cobre el resto</div></div>
+    </div>
+    ${sinEnt.length?`<div class="hint" style="margin-bottom:14px">Adem\u00e1s hay ${sinEnt.length} remito(s) por ${fmt(S(sinEnt,'base'))} cargados pero sin entregar: no se cuentan hasta que se entreguen (comisi\u00f3n futura ${fmt(S(sinEnt,'comPend'))}).</div>`:''}
+    <div class="field" style="max-width:220px;margin-bottom:16px"><label>Per\u00edodo</label>
+      <select onchange="NIT_MES=this.value;nitRender()">${opts}</select></div>
+
+    <div class="hint" style="margin-bottom:6px"><strong>Por mes</strong> (todo el hist\u00f3rico)</div>
+    ${tabla(`<tr><th ${th}>Mes</th><th ${thr}>Rem.</th><th ${thr}>Vendido</th><th ${thr}>Rindi\u00f3</th><th ${thr}>Comisi\u00f3n</th><th ${thr}>Falta cobrar</th></tr>${filasMes||`<tr><td ${td} colspan="6">Sin datos</td></tr>`}`)}
+
+    <div class="hint" style="margin-bottom:6px"><strong>Por cliente</strong>${NIT_MES?' \u00b7 '+nitMesShow(NIT_MES):''}</div>
+    ${tabla(`<tr><th ${th}>Cliente</th><th ${thr}>Rem.</th><th ${thr}>Vendido</th><th ${thr}>Rindi\u00f3</th><th ${thr}>Comisi\u00f3n</th><th ${thr}>Falta rendir</th></tr>${filasCli||`<tr><td ${td} colspan="6">Sin datos</td></tr>`}`)}
+
+    <div class="hint" style="margin-bottom:6px"><strong>Detalle por remito</strong></div>
+    ${tabla(`<tr><th ${th}>Fecha</th><th ${th}>Cliente</th><th ${th}>N\u00ba</th><th ${thr}>Vendido</th><th ${thr}>Rindi\u00f3</th><th ${thr}>Comisi\u00f3n</th><th ${thr}>Falta rendir</th><th ${th}></th></tr>${filasDet||`<tr><td ${td} colspan="8">Sin datos</td></tr>`}`)}
+    <div class="hint">Mirta carga el remito por el precio total y vos carg\u00e1s el pago por lo que Nitopi te trajo (neto): el remito queda saldado solo. Si te trae de menos queda saldo abierto y ac\u00e1 lo ves como falta rendir. En el resto de la app todo se sigue viendo por el valor de venta.</div>`;
+}
+
+function nitOpen(){
+  if(!NIT_OK){ if(prompt('')!==NIT_KEY) return; NIT_OK=true; }
+  nitRender(); openOverlay('ovNit');
+}
+
+function nitCSV(){
+  const fil=nitFiltradas(), q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const n=v=>q((+v||0).toFixed(2).replace('.',','));
+  const lin=[['Fecha','Cliente','Numero','Ref','Vendido','Cobrado al cliente','Rindio Nitopi (neto)','Comision Nitopi','Falta cobrar','Falta rendir (neto)','Comision pendiente','Estado'].map(q).join(';')];
+  fil.forEach(r=>lin.push([q(r.fecha),q(r.cliente),q(r.numero),q(r.ref),n(r.base),n(r.cob),n(r.real),
+    n(r.com),n(r.saldo),n(r.saldoNeto),n(r.comPend),
+    q(r.ent?(r.saldo?(r.cob?'parcial':'abierto'):'cobrado'):'sin entregar')].join(';')));
+  const e=fil.filter(r=>r.ent), S=k=>e.reduce((s,r)=>s+r[k],0);
+  lin.push([q('TOTAL'),q(''),q(''),q(''),n(S('base')),n(S('cob')),n(S('real')),n(S('com')),n(S('saldo')),n(S('saldoNeto')),n(S('comPend')),q('')].join(';'));
+  const blob=new Blob(['\ufeff'+lin.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='comisiones-'+(NIT_MES||'todo')+'.csv';a.click();URL.revokeObjectURL(a.href);
+}
+
+document.addEventListener('click',function(e){
+  if(!e.target||!e.target.classList||!e.target.classList.contains('hlogo-img'))return;
+  const t=Date.now();
+  NIT_TAPS=NIT_TAPS.filter(x=>t-x<1800);
+  NIT_TAPS.push(t);
+  if(NIT_TAPS.length>=3){NIT_TAPS=[];nitOpen()}
+});
 
 (function init(){const u=localStorage.getItem(LS.user);if(u&&Object.values(PINS).includes(u)){CURRENT_USER=u;startApp()}else $('pinInput').focus()})();
 </script>
