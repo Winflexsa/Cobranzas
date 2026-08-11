@@ -561,7 +561,7 @@ body.modo-modulo nav{display:none}
       <option value="0">Todav&iacute;a sin entregar (no suma al total a cobrar)</option></select></div>
     <div id="efeAplicWrap"></div>
     <div class="field"><label>Observaci&oacute;n</label><input id="efeNota" placeholder="Opcional"></div>
-    <div class="hint" id="efeMovHint">El importe va siempre en positivo. En un pago, si es un cheque a fecha, poné la fecha en que se cobra: queda marcado como valor a cobrar y no cancela la antigüedad hasta ese día.</div>
+    <div class="hint" id="efeMovHint">El cheque a fecha descuenta el saldo desde que lo carg&aacute;s: el remito queda dado de baja y el cheque figura como valor todav&iacute;a sin acreditar. El importe va siempre en positivo. En un pago, si es un cheque a fecha, poné la fecha en que se cobra: queda marcado como valor a cobrar y no cancela la antigüedad hasta ese día.</div>
   </div>
   <div class="foot"><button class="btn ghost" id="efeDelBtn" onclick="deleteEfeMov()" style="margin-right:auto;color:var(--venc)">Eliminar</button><button class="btn ghost" onclick="closeOverlay('ovEfeMov')">Cancelar</button><button class="btn" onclick="saveEfeMov()">Guardar</button></div>
 </div></div>
@@ -1479,8 +1479,12 @@ function efeCalc(){
     const porEntregar=porEntregarMovs.reduce((s,m)=>s+m.importe,0);
     const pagos=movs.filter(m=>m.importe<0);
     const rechazados=pagos.filter(m=>m.chequeOk===false);
-    const cobrados=pagos.filter(m=>!efeFuturo(m)&&m.chequeOk!==false);
-    const aFecha=pagos.filter(m=>efeFuturo(m)&&m.chequeOk!==false);
+    /* Los cheques a fecha descuentan el saldo igual que en la planilla: el remito
+       queda dado de baja y el cheque figura aparte como valor todavía sin acreditar.
+       Sólo un cheque rechazado vuelve a ser deuda. */
+    const cobrados=pagos.filter(m=>m.chequeOk!==false);
+    const aFecha=cobrados.filter(m=>efeFuturo(m)&&m.chequeOk!==true);
+    const acreditados=cobrados.filter(m=>!aFecha.includes(m));
     /* cheques cuya fecha ya pasó y nadie confirmó que se acreditaron */
     const chequesPorConfirmar=pagos.filter(m=>m.chequeOk==null&&(m.medio||'')==='Cheque'&&!!m.fecha&&m.fecha<=todayISO());
     // 1) lo que se imputó a mano a un remito puntual  2) el resto, al más viejo primero
@@ -1498,13 +1502,14 @@ function efeCalc(){
     const valores=aFecha.reduce((s,m)=>s-m.importe,0);
     const agg=[0,0,0,0,0];
     abiertos.forEach(a=>{agg[a.dias==null?EFE_SF:EFE_BUCKETS.findIndex(b=>b.max!=null&&a.dias<=b.max)]+=a.monto});
-    const fp=cobrados.map(p=>p.fecha).filter(Boolean).sort();
+    const fp=acreditados.map(p=>p.fecha).filter(Boolean).sort();
     const ultPago=fp.length?fp[fp.length-1]:null;
     return {nombre,movs,remitos,porEntregarMovs,porEntregar,pagos,cobrados,rechazados,chequesPorConfirmar,aFecha,valores,pendiente,abiertos,agg,sinAplicar,
       aFavor:Math.max(0,porImputar),
       diasMax:(function(){const d=abiertos.map(a=>a.dias).filter(x=>x!=null);return d.length?Math.max.apply(null,d):null})(),
       ultPago,diasSinPago:ultPago?efeDias(ultPago):null,
-      cobrado:cobrados.reduce((s,m)=>s-m.importe,0),
+      cobrado:acreditados.reduce((s,m)=>s-m.importe,0),
+      descontado:cobrados.reduce((s,m)=>s-m.importe,0),
       oficial:getCliente(efeLinkDe(nombre))||null};
   });
 }
@@ -1515,8 +1520,7 @@ function renderEfectivo(){
   const C=efeCalc();
   const total=C.reduce((s,c)=>s+Math.max(0,c.pendiente),0);
   const valores=C.reduce((s,c)=>s+c.valores,0);
-  /* para "sin cobertura" el cheque sólo cubre hasta lo que el cliente debe */
-  const valoresUtil=C.reduce((s,c)=>s+Math.min(c.valores,Math.max(0,c.pendiente)),0);
+  const nChq=C.reduce((s,c)=>s+c.aFecha.length,0);
   const conSaldo=C.filter(c=>c.pendiente>0.5);
   const agg=[0,0,0,0,0];C.forEach(c=>c.agg.forEach((v,i)=>agg[i]+=v));
   const vencido=agg[2]+agg[3];
@@ -1526,13 +1530,13 @@ function renderEfectivo(){
 
   $('efeKpis').innerHTML=`
     <div class="kpi por"><div class="bar"></div><div class="lab">Pendiente de cobro</div><div class="val num">${fmtM(total)}</div><div class="meta">${conSaldo.length} clientes · ${abiertos} remitos</div></div>
-    <div class="kpi efe"><div class="bar"></div><div class="lab">Cubierto con valores</div><div class="val num">${fmtM(valoresUtil)}</div><div class="meta">${valores>valoresUtil+0.5?'de '+fmtM(valores)+' en cheques a fecha':(valores?'cheques a fecha':'sin cheques diferidos')}</div></div>
-    <div class="kpi cobr"><div class="bar"></div><div class="lab">Sin cobertura</div><div class="val num">${fmtM(Math.max(0,total-valoresUtil))}</div><div class="meta">plata que hay que salir a buscar</div></div>
+    <div class="kpi efe"><div class="bar"></div><div class="lab">Cheques a fecha</div><div class="val num">${fmtM(valores)}</div><div class="meta">${valores?nChq+' cheque(s) ya descontados del saldo, todavía sin acreditar':'sin cheques diferidos'}</div></div>
+    <div class="kpi cobr"><div class="bar"></div><div class="lab">Sin entrar todavía</div><div class="val num">${fmtM(total+valores)}</div><div class="meta">pendiente + cheques a fecha</div></div>
     <div class="kpi venc"><div class="bar"></div><div class="lab">Vencido +60 días</div><div class="val num" style="color:var(--venc)">${fmtM(vencido)}</div><div class="meta">${total?Math.round(vencido/total*100):0}% del pendiente</div></div>
     <div class="kpi por"><div class="bar"></div><div class="lab">Por entregar</div><div class="val num" style="color:var(--prox)">${fmtM(porEntregar)}</div><div class="meta">${nPorEnt} remito${nPorEnt===1?'':'s'} · no suma al total</div></div>`;
 
   const al=[];
-  C.filter(c=>c.valores>0).forEach(c=>al.push(`<b>${esc(c.nombre)}</b>: ${fmt(c.valores)} cancelados con cheques a ${c.aFecha.map(m=>dShow(m.fecha)).join(', ')}. Figura saldado, pero la plata todavía no entró.`));
+  C.filter(c=>c.valores>0).forEach(c=>al.push(`<b>${esc(c.nombre)}</b>: ${fmt(c.valores)} descontados con cheques a ${c.aFecha.map(m=>dShow(m.fecha)).join(', ')}. El saldo ya baj\u00f3, pero la plata todav\u00eda no entr\u00f3.`));
   C.filter(c=>c.porEntregar>0.5).forEach(c=>al.push(`<b>${esc(c.nombre)}</b>: ${fmt(c.porEntregar)} en ${c.porEntregarMovs.length} remito(s) cargado(s) pero todavía sin entregar. No suman al total a cobrar hasta que los marques como entregados.`));
   C.filter(c=>c.porEntregar>0.5&&c.pendiente<-0.5).forEach(c=>al.push(`<b>${esc(c.nombre)}</b> pagó por adelantado: hay ${fmt(Math.min(-c.pendiente,c.porEntregar))} cobrados de material que todavía no salió.`));
   C.forEach(c=>c.chequesPorConfirmar.forEach(m=>al.push(
@@ -1679,6 +1683,7 @@ function openEfeCli(i){
       <span class="efe-chip">Pendiente <strong class="num">${fmt(c.pendiente)}</strong></span>
       <span class="efe-chip">Remitado <strong class="num">${fmt(c.remitos.reduce((s,m)=>s+m.importe,0))}</strong></span>
       <span class="efe-chip">Cobrado <strong class="num">${fmt(c.cobrado)}</strong></span>
+      ${(c.descontado-c.cobrado)>0.5?`<span class="efe-chip">Con cheques a fecha <strong class="num">${fmt(c.descontado-c.cobrado)}</strong></span>`:''}
       ${(function(){const k=c.movs.reduce((s,m)=>s+nitCom(m),0);
         return k?`<span class="efe-chip">Comisi\u00f3n ${esc(NIT_VEND)} <strong class="num">${fmt(k)}</strong></span>`:''})()}
       ${c.valores?`<span class="efe-chip">Cheques a fecha <strong class="num">${fmt(c.valores)}</strong></span>`:''}
@@ -2345,7 +2350,7 @@ async function exportEfeExcel(){
 
     const C=efeCalc();
     const total=C.reduce((s,c)=>s+Math.max(0,c.pendiente),0);
-    const valores=C.reduce((s,c)=>s+Math.min(c.valores,Math.max(0,c.pendiente)),0);
+    const valores=C.reduce((s,c)=>s+c.valores,0);
     const agg=[0,0,0,0,0];C.forEach(c=>c.agg.forEach((v,i)=>agg[i]+=v));
     const porEntregar=C.reduce((s,c)=>s+c.porEntregar,0);
 
@@ -2387,7 +2392,7 @@ async function exportEfeExcel(){
     let r=7;
     function titulo(row,text){ws.mergeCells(`B${row}:F${row}`);const c=ws.getCell(`B${row}`);c.value=text;c.font={bold:true,size:12,color:{argb:VERDE}};c.border={bottom:{style:'medium',color:{argb:VERDE}}}}
     titulo(r,'Situación general');r+=2;
-    [['Pendiente de cobro',total],['Cubierto con cheques a fecha',valores],['Sin cobertura',total-valores],
+    [['Pendiente de cobro',total],['Cheques a fecha (ya descontados)',valores],['Sin entrar todavía',total+valores],
      ['Vencido +60 días',agg[2]+agg[3]],['Por entregar (no suma)',porEntregar]].forEach((k,i)=>{
       const row=r+i;const lc=ws.getCell(`B${row}`);lc.value=k[0];lc.font={color:{argb:GRIS},size:11};
       const vc=ws.getCell(`C${row}`);vc.value=k[1];vc.numFmt=money;vc.alignment={horizontal:'right'};
