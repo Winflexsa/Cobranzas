@@ -531,7 +531,7 @@ body.modo-modulo nav{display:none}
 </div></div>
 
 <!-- MODAL MOVIMIENTO EFECTIVO -->
-<div class="overlay" id="ovEfeMov"><div class="modal" style="max-width:470px">
+<div class="overlay" id="ovEfeMov"><div class="modal" style="max-width:540px">
   <header><h2 id="efeMovTit">Nuevo movimiento</h2><button class="x" onclick="closeOverlay('ovEfeMov')">&times;</button></header>
   <div class="body">
     <div class="field"><label>Cliente *</label><input id="efeCliente" list="efeClientesList" placeholder="Ej: EL MATACO" oninput="efeRenderAplic();efeAutoVend()"><datalist id="efeClientesList"></datalist></div>
@@ -540,7 +540,7 @@ body.modo-modulo nav{display:none}
       <div class="field"><label>Fecha *</label><input id="efeFecha" type="date"></div>
     </div>
     <div class="frow">
-      <div class="field"><label>Importe *</label><input id="efeImporte" type="number" step="0.01" placeholder="0" oninput="efeNetoHint()"></div>
+      <div class="field"><label>Importe *</label><input id="efeImporte" type="number" step="0.01" placeholder="0" oninput="efeImporteInput()"></div>
       <div class="field" id="efeMedioWrap"><label>Medio</label><select id="efeMedio" onchange="efeTipoChange()">
         <option value="Efectivo">Efectivo</option><option value="Cheque">Cheque</option>
         <option value="Transferencia">Transferencia</option><option value="">Sin especificar</option></select></div>
@@ -559,8 +559,8 @@ body.modo-modulo nav{display:none}
     <div class="field" id="efeEntWrap"><label>Estado de entrega</label><select id="efeEnt">
       <option value="1">Entregado / retirado</option>
       <option value="0">Todav&iacute;a sin entregar (no suma al total a cobrar)</option></select></div>
-    <div class="field"><label>Observaci&oacute;n</label><input id="efeNota" placeholder="Opcional"></div>
     <div id="efeAplicWrap"></div>
+    <div class="field"><label>Observaci&oacute;n</label><input id="efeNota" placeholder="Opcional"></div>
     <div class="hint" id="efeMovHint">El importe va siempre en positivo. En un pago, si es un cheque a fecha, poné la fecha en que se cobra: queda marcado como valor a cobrar y no cancela la antigüedad hasta ese día.</div>
   </div>
   <div class="foot"><button class="btn ghost" id="efeDelBtn" onclick="deleteEfeMov()" style="margin-right:auto;color:var(--venc)">Eliminar</button><button class="btn ghost" onclick="closeOverlay('ovEfeMov')">Cancelar</button><button class="btn" onclick="saveEfeMov()">Guardar</button></div>
@@ -1644,6 +1644,14 @@ function openEfeCli(i){
     if(m.importe>0){
       if(m.entregado===false)extra+='<span class="tag-efe w">sin entregar</span>';
       else if(m.fechaEntrega)extra+=`<span class="tag-efe g">entregado ${dShow(m.fechaEntrega)}</span>`;
+      if(m.entregado!==false){
+        const ab=c.abiertos.find(x=>x.id===m.id);
+        if(!ab)extra+='<span class="tag-efe g">cancelado</span>';
+        else{
+          extra+=(ab.monto<m.importe-0.5)?`<span class="tag-efe w">parcial &middot; queda ${fmt(ab.monto)}</span>`:'<span class="tag-efe">pendiente</span>';
+          extra+=` <button class="mini go" onclick="event.stopPropagation();efeCobrarRemito('${m.id}')">Cobrar</button>`;
+        }
+      }
       if(m.producto)extra+=`<span class="tag-efe p">${esc(m.producto)}</span>`;
       if(m.vendedor)extra+=`<span class="tag-efe g">${esc(m.vendedor)}</span>`;
       if(nitCom(m))extra+=`<div class="nota-txt">Venta ${fmt(nitBruto(m))} \u2212 comisi\u00f3n ${esc(NIT_VEND)} ${fmt(nitCom(m))}</div>`;
@@ -1776,6 +1784,7 @@ function efeNetoHint(){
 }
 function openEfeMov(id,cliente){
   if(!id)EFE_MOV_LINK=null;
+  EFE_IMP_AUTO=false;
   EFE_EDIT=id?efeList().find(m=>m.id===id):null;
   const m=EFE_EDIT;
   $('efeMovTit').textContent=m?'Editar movimiento':'Nuevo movimiento';
@@ -2162,62 +2171,137 @@ function efeAplicadoPorOtros(remId,pagoId){
   return efeList().filter(m=>m.importe<0&&m.id!==pagoId)
     .reduce((s,p)=>s+(p.aplic||[]).filter(a=>a.r===remId).reduce((x,a)=>x+a.m,0),0);
 }
+/* saldo sin cobrar de un remito, sin contar lo que aplica el pago que estoy editando */
+function efeRemSaldo(r,pagoId){return Math.max(0,Math.round((r.importe-efeAplicadoPorOtros(r.id,pagoId))*100)/100)}
+let EFE_IMP_AUTO=false; /* true cuando el importe del pago lo calculo la app al tildar remitos */
+
+function efeImporteInput(){EFE_IMP_AUTO=false;efeNetoHint();efeAplicTotal()}
+
 function efeRenderAplic(){
   const w=$('efeAplicWrap'); if(!w)return;
   if($('efeTipo').value!=='pago'){w.innerHTML='';return}
   const cli=$('efeCliente').value.trim();
-  const todos=efeList().filter(m=>m.cliente===cli&&m.importe>0);
-  const rem=todos.filter(m=>m.entregado!==false)
-    .sort((a,b)=>(a.fecha||'0000')<(b.fecha||'0000')?-1:1);
-  const sinEnt=todos.length-rem.length;
-  if(!rem.length){w.innerHTML='<div class="hint">'+(sinEnt?'Los remitos de este cliente todavía figuran sin entregar, así que no se pueden imputar: el pago va a quedar a cuenta.':'Este cliente todavía no tiene remitos cargados: el pago va a quedar a cuenta.')+'</div>';return}
   const yo=EFE_EDIT?EFE_EDIT.id:null;
-  const filas=rem.map(r=>{
-    const otros=efeAplicadoPorOtros(r.id,yo);
-    const disp=Math.max(0,r.importe-otros);
+  const todos=efeList().filter(m=>m.cliente===cli&&m.importe>0);
+  const entregados=todos.filter(m=>m.entregado!==false)
+    .sort((a,b)=>(a.fecha||'0000')<(b.fecha||'0000')?-1:1);
+  const sinEnt=todos.length-entregados.length;
+  const datos=entregados.map(r=>{
     const mio=EFE_EDIT?((EFE_EDIT.aplic||[]).filter(a=>a.r===r.id).reduce((x,a)=>x+a.m,0)):0;
-    return `<tr${disp<0.5&&mio<0.5?' style="opacity:.45"':''}>
-      <td>${esc(efeRemitoLabel(r))}<div class="cli-meta">${r.fecha?dShow(r.fecha):'s/f'}</div></td>
-      <td class="r num">${fmt(r.importe)}</td>
-      <td class="r num">${fmt(disp)}</td>
-      <td class="r"><input type="number" step="0.01" min="0" id="apl_${r.id}" value="${mio||''}" placeholder="0"
-        oninput="efeAplicTotal()" style="width:105px;text-align:right;padding:6px 8px;border:1px solid var(--border);border-radius:8px"></td></tr>`}).join('');
+    return {r,saldo:efeRemSaldo(r,yo),mio};
+  });
+  const abiertos=datos.filter(d=>d.saldo>0.5||d.mio>0.5);
+  const cerrados=datos.length-abiertos.length;
+  if(!abiertos.length){
+    w.innerHTML='<div class="hint">'+(sinEnt?'Los remitos de este cliente todav&iacute;a figuran sin entregar, as&iacute; que no se pueden dar de baja: el pago va a quedar a cuenta.'
+      :(cerrados?'Todos los remitos de este cliente ya est&aacute;n cancelados: el pago va a quedar a favor.'
+      :'Este cliente todav&iacute;a no tiene remitos cargados: el pago va a quedar a cuenta.'))+'</div>';
+    return;
+  }
+  const filas=abiertos.map(d=>{
+    const r=d.r, dias=efeDias(r.fecha);
+    const meta=[(r.fecha?dShow(r.fecha):'s/f'),(r.ref||''),(dias!=null?dias+' d':'')].filter(Boolean).join(' &middot; ');
+    return `<tr id="aplrow_${r.id}">
+      <td style="width:30px;padding-right:0"><input type="checkbox" id="chk_${r.id}" onchange="efeAplicToggle('${r.id}')" style="width:18px;height:18px"></td>
+      <td><label for="chk_${r.id}" style="cursor:pointer"><b>${esc(efeRemitoLabel(r))}</b><div class="cli-meta">${meta}</div></label></td>
+      <td class="r num">${fmt(d.saldo)}</td>
+      <td class="r"><input type="number" step="0.01" min="0" id="apl_${r.id}" data-saldo="${d.saldo}" value="${d.mio||''}" placeholder="0"
+        oninput="efeAplicInput('${r.id}')" style="width:100px;text-align:right;padding:6px 8px;border:1px solid var(--border);border-radius:8px"></td>
+      <td class="r"><span class="tag-efe" id="est_${r.id}">&mdash;</span></td></tr>`}).join('');
   w.innerHTML=`<div class="card" style="padding:13px;margin-top:6px;background:var(--surface2)">
-    <h3 style="margin-bottom:9px">Aplicar el pago a un remito</h3>
-    <div class="tablewrap"><table><thead><tr><th>Remito</th><th class="r">Importe</th><th class="r">Sin cobrar</th><th class="r">Aplicar</th></tr></thead><tbody>${filas}</tbody></table></div>
+    <h3 style="margin-bottom:4px">Dar de baja remitos con este pago</h3>
+    <div class="hint" style="margin:0 0 9px">Tild&aacute; el remito que est&aacute;s cobrando: se cancela entero. Si el pago no alcanza, o cobr&aacute;s una parte, escrib&iacute; el importe en la &uacute;ltima columna y queda como baja parcial.</div>
+    <div class="tablewrap"><table><thead><tr><th></th><th>Remito</th><th class="r">Debe</th><th class="r">Se cobra</th><th class="r">Estado</th></tr></thead><tbody>${filas}</tbody></table></div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
-      <button class="btn ghost sm" onclick="efeAplicFIFO()">Aplicar al m&aacute;s viejo</button>
-      <button class="btn ghost sm" onclick="efeAplicLimpiar()">Limpiar</button>
+      <button class="btn ghost sm" onclick="efeAplicFIFO()">Cancelar del m&aacute;s viejo al m&aacute;s nuevo</button>
+      <button class="btn ghost sm" onclick="efeAplicLimpiar()">Destildar todo</button>
       <span class="hint" id="efeAplicResto" style="margin:0;margin-left:auto"></span>
     </div>
-    <div class="hint">Si no aplic&aacute;s nada, el pago se descuenta igual del saldo del cliente, empezando por el remito m&aacute;s viejo.${sinEnt?' <b>'+sinEnt+' remito(s) de este cliente figuran sin entregar y no aparecen ac&aacute;: marcalos como entregados para poder imputarles el pago.</b>':''}</div>
+    <div class="hint">Si no tild&aacute;s nada, el pago se descuenta igual del saldo del cliente, empezando por el remito m&aacute;s viejo.${cerrados?' '+cerrados+' remito(s) ya cancelado(s) no se muestran.':''}${sinEnt?' <b>'+sinEnt+' remito(s) figuran sin entregar y no aparecen ac&aacute;: marcalos como entregados para poder darlos de baja.</b>':''}</div>
   </div>`;
   efeAplicTotal();
 }
 function efeAplicInputs(){return [...document.querySelectorAll('#efeAplicWrap input[id^=apl_]')]}
+function efeAplicSaldo(inp){return Math.round((+(inp.dataset.saldo||0))*100)/100}
+/* lo que todavía queda libre del importe del pago, sin contar lo cargado en este remito */
+function efeAplicLibre(exceptoId){
+  const imp=Math.abs(+$('efeImporte').value||0);
+  const usa=efeAplicInputs().filter(i=>i.id!=='apl_'+exceptoId).reduce((s,i)=>s+(+i.value||0),0);
+  return Math.max(0,Math.round((imp-usa)*100)/100);
+}
+/* tilde = baja total del remito (o de lo que alcance el pago) */
+function efeAplicToggle(id){
+  const inp=$('apl_'+id), chk=$('chk_'+id); if(!inp)return;
+  if(chk.checked){
+    const saldo=efeAplicSaldo(inp);
+    const imp=Math.abs(+$('efeImporte').value||0);
+    const usa=(!imp||EFE_IMP_AUTO)?saldo:Math.min(saldo,efeAplicLibre(id));
+    inp.value=usa>0.005?usa:'';
+    if(usa<saldo-0.5&&usa>0.005)toast('El pago no alcanza para cancelarlo entero: queda como baja parcial','warn');
+  }else inp.value='';
+  efeAplicSyncImporte();efeAplicTotal();
+}
+/* importe escrito a mano en una fila = baja parcial */
+function efeAplicInput(id){
+  const inp=$('apl_'+id); if(!inp)return;
+  const saldo=efeAplicSaldo(inp);
+  if((+inp.value||0)>saldo+0.5){inp.value=saldo;toast('Ese remito debe '+fmt(saldo),'warn')}
+  efeAplicSyncImporte();efeAplicTotal();
+}
+/* si el importe del pago todavía no lo escribió el usuario, lo va armando con lo tildado */
+function efeAplicSyncImporte(){
+  const imp=$('efeImporte'); if(!imp)return;
+  const usa=Math.round(efeAplicInputs().reduce((s,i)=>s+(+i.value||0),0)*100)/100;
+  if(!imp.value||EFE_IMP_AUTO){imp.value=usa>0.005?usa:'';EFE_IMP_AUTO=usa>0.005;efeNetoHint()}
+}
 function efeAplicTotal(){
   const imp=Math.abs(+$('efeImporte').value||0);
-  const usa=efeAplicInputs().reduce((s,i)=>s+(+i.value||0),0);
+  let usa=0;
+  efeAplicInputs().forEach(i=>{
+    const v=Math.round((+i.value||0)*100)/100; usa+=v;
+    const id=i.id.slice(4), saldo=efeAplicSaldo(i);
+    const chk=$('chk_'+id), est=$('est_'+id), row=$('aplrow_'+id);
+    if(chk)chk.checked=v>0.005;
+    if(est){
+      if(v<=0.005){est.className='tag-efe';est.innerHTML='&mdash;'}
+      else if(v>=saldo-0.5){est.className='tag-efe g';est.textContent='cancelado'}
+      else {est.className='tag-efe w';est.textContent='queda '+fmt(saldo-v)}
+    }
+    if(row)row.style.background=(v>0.005&&v>=saldo-0.5)?'rgba(21,164,99,.10)':(v>0.005?'rgba(224,98,10,.08)':'');
+  });
+  usa=Math.round(usa*100)/100;
   const el=$('efeAplicResto'); if(!el)return usa;
   const resto=Math.round((imp-usa)*100)/100;
   el.innerHTML = usa>imp+0.5
-    ? `<b style="color:var(--venc)">Estás aplicando ${fmt(usa)} y el pago es de ${fmt(imp)}</b>`
-    : (resto>0.5?`Queda a cuenta: <b>${fmt(resto)}</b>`:'<b style="color:var(--cobr)">Pago aplicado por completo</b>');
+    ? `<b style="color:var(--venc)">Est&aacute;s dando de baja ${fmt(usa)} y el pago es de ${fmt(imp)}</b>`
+    : (resto>0.5?`Aplicado <b>${fmt(usa)}</b> &middot; queda a cuenta <b>${fmt(resto)}</b>`
+               :(usa>0.005?'<b style="color:var(--cobr)">Pago aplicado por completo</b>':'Sin aplicar: el pago queda a cuenta'));
   return usa;
 }
 function efeAplicFIFO(){
   let disp=Math.abs(+$('efeImporte').value||0);
-  if(!disp){toast('Poné primero el importe del pago','bad');return}
-  const yo=EFE_EDIT?EFE_EDIT.id:null;
+  const libre=!disp||EFE_IMP_AUTO;
   efeAplicInputs().forEach(i=>{
-    const r=efeList().find(m=>m.id===i.id.slice(4));
-    const libre=Math.max(0,r.importe-efeAplicadoPorOtros(r.id,yo));
-    const usa=Math.min(disp,libre); disp-=usa;
+    const saldo=efeAplicSaldo(i);
+    const usa=libre?saldo:Math.min(disp,saldo); disp-=usa;
     i.value=usa>0.005?Math.round(usa*100)/100:'';
   });
-  efeAplicTotal();
+  efeAplicSyncImporte();efeAplicTotal();
 }
-function efeAplicLimpiar(){efeAplicInputs().forEach(i=>i.value='');efeAplicTotal()}
+function efeAplicLimpiar(){efeAplicInputs().forEach(i=>i.value='');efeAplicSyncImporte();efeAplicTotal()}
+
+/* Cobrar un remito puntual desde la ficha del cliente: abre el pago ya tildado. */
+function efeCobrarRemito(id){
+  const r=efeList().find(m=>m.id===id); if(!r)return;
+  closeOverlay('ovEfeCli');
+  openEfeMov(null,r.cliente);
+  $('efeTipo').value='pago';
+  $('efeImporte').value='';
+  efeTipoChange();
+  const inp=$('apl_'+id);
+  if(inp){const chk=$('chk_'+id);if(chk)chk.checked=true;efeAplicToggle(id)}
+  else toast('Ese remito no se puede imputar (revisá el estado de entrega)','warn');
+}
 
 /* Convierte la imputación automática en imputación explícita, para los pagos ya cargados. */
 function efeImputarAuto(nombre){
