@@ -1644,6 +1644,9 @@ function renderEfectivo(){
   if(top&&total&&top.pendiente/total>0.3)al.push(`Concentración: <b>${esc(top.nombre)}</b> es el ${Math.round(top.pendiente/total*100)}% del pendiente (${fmt(top.pendiente)}).`);
   const sinFecha=efeList().filter(m=>!m.fecha);
   if(sinFecha.length)al.push(`${sinFecha.length} movimiento(s) sin fecha — no entran en la antigüedad.`);
+  const nitCand=comNetearCand();
+  if(nitCand.libres.length)al.push(`<b>${NIT_VEND}</b>: ${nitCand.libres.length} remito(s) sin cobrar por ${fmt(nitCand.libres.reduce((s,r)=>s+r.m.importe,0))} están cargados por el precio total, sin descontar la comisión del ${(NIT_PCT*100)}%. El saldo que ves no coincide con la plata que te rinden.
+     <button class="mini" style="margin-left:8px" onclick="openCom()">Ver y netear</button>`);
   $('efeAlertas').innerHTML=al.map(a=>`<div class="efe-alert">${a}</div>`).join('');
 
   const sum=agg.reduce((a,b)=>a+b,0)||1;
@@ -2832,13 +2835,38 @@ function comDatos(){
 }
 function comFil(){return comDatos().filter(r=>!COM_MES||comMes(r.fecha)===COM_MES)}
 
+/* Candidatos a netear: remitos de Nitopi cargados por el precio total (sin bruto
+   guardado). Se separan los que todavía no tienen ningún cobro imputado — esos se
+   netean solos — de los que ya cobraron algo, que no se tocan: bajarles el saldo
+   ahora descuadraría los pagos ya cargados. */
+function comNetearCand(){
+  const libres=[], tocados=[];
+  efeCalc().forEach(c=>{
+    const ab={}; c.abiertos.forEach(a=>ab[a.id]=a.monto);
+    c.movs.forEach(m=>{
+      if(!(m.importe>0))return;
+      if(+m.bruto>0)return;                                   // ya neteado
+      if(efeVendDe(m,c.nombre)!==NIT_VEND)return;
+      const saldo=(m.entregado===false)?m.importe:(ab[m.id]||0);
+      const cobrado=nitR2(m.importe-saldo);
+      (cobrado>0.5?tocados:libres).push({m,cliente:c.nombre,cobrado,saldo});
+    });
+  });
+  return {libres,tocados};
+}
 function comNetearPend(){
-  const p=efeList().filter(m=>m.importe>0&&efeVendDe(m)===NIT_VEND&&!(+m.bruto>0));
-  if(!p.length){toast('No hay remitos para netear','ok');return}
-  if(!confirm('Hay '+p.length+' remito(s) de '+NIT_VEND+' cargados por el precio total.\n\nSe les va a descontar el '+(NIT_PCT*100)+'% y van a quedar por el neto a cobrar. El importe original queda guardado para el detalle.\n\n\u00bfSeguir?'))return;
-  p.forEach(m=>{m.bruto=nitR2(m.importe);m.importe=nitR2(m.importe*(1-NIT_PCT));m.updatedAt=NOW()});
+  const cand=comNetearCand(), libres=cand.libres, tocados=cand.tocados;
+  if(!libres.length){
+    toast(tocados.length?'Los '+tocados.length+' que quedan ya tienen cobros: hay que revisarlos a mano':'No hay remitos para netear','ok');
+    return;
+  }
+  const tot=libres.reduce((s,r)=>s+r.m.importe,0), com=nitR2(tot*NIT_PCT);
+  if(!confirm('Hay '+libres.length+' remito(s) de '+NIT_VEND+' todav\u00eda sin cobrar, cargados por el precio total ('+fmt(tot)+').\n\nSe les descuenta el '+(NIT_PCT*100)+'% ('+fmt(com)+') y quedan por el neto a cobrar ('+fmt(tot-com)+'). El importe original queda guardado para el detalle.'
+    +(tocados.length?'\n\nOJO: hay '+tocados.length+' remito(s) que ya tienen cobros imputados. A esos no se les toca nada, quedan listados aparte para que los revises a mano.':'')
+    +'\n\n\u00bfSeguir?'))return;
+  libres.forEach(r=>{const m=r.m;m.bruto=nitR2(m.importe);m.importe=nitR2(m.importe*(1-NIT_PCT));m.updatedAt=NOW()});
   saveToCloud();renderEfectivo();renderTotal();comRender();
-  toast(p.length+' remito(s) neteado(s)','ok');
+  toast(libres.length+' remito(s) neteado(s) \u00b7 '+fmt(com)+' de comisi\u00f3n','ok');
 }
 
 function comRender(){
@@ -2846,7 +2874,7 @@ function comRender(){
   const S=(a,k)=>a.reduce((s,r)=>s+(+r[k]||0),0);
   const meses=[...new Set(todas.map(r=>comMes(r.fecha)).filter(Boolean))].sort().reverse();
   if(COM_MES&&meses.indexOf(COM_MES)<0)COM_MES='';
-  const sinNetear=efeList().filter(m=>m.importe>0&&efeVendDe(m)===NIT_VEND&&!(+m.bruto>0));
+  const cand=comNetearCand();
 
   const porMes={};
   todas.filter(r=>r.ent).forEach(r=>{const k=comMes(r.fecha)||'sin fecha';
@@ -2880,8 +2908,12 @@ function comRender(){
     `<td ${td}>${r.ent?(r.saldo?(r.cobrado?'parcial':'abierto'):'cobrado'):'<span style="color:var(--prox)">sin entregar</span>'}</td></tr>`).join('');
 
   $('comBody').innerHTML=`
-    ${sinNetear.length?`<div class="efe-alert" style="margin-bottom:16px">Hay <b>${sinNetear.length}</b> remito(s) de ${NIT_VEND} cargados por el precio total, sin descontarles la comisi\u00f3n.
-      <div style="margin-top:8px"><button class="btn sm" onclick="comNetearPend()">Descontarles el ${(NIT_PCT*100)}% ahora</button></div></div>`:''}
+    ${(cand.libres.length||cand.tocados.length)?`<div class="efe-alert" style="margin-bottom:16px">
+      ${cand.libres.length?`Hay <b>${cand.libres.length}</b> remito(s) de ${NIT_VEND} <b>todav\u00eda sin cobrar</b> cargados por el precio total (${fmt(cand.libres.reduce((s,r)=>s+r.m.importe,0))}). Al netearlos, la cuenta del cliente pasa a mostrar el neto que te rinde ${NIT_VEND}.
+      <div style="margin-top:8px"><button class="btn sm" onclick="comNetearPend()">Descontarles el ${(NIT_PCT*100)}% ahora</button></div>`:''}
+      ${cand.tocados.length?`<div style="margin-top:${cand.libres.length?'12px':'0'}">Estos <b>${cand.tocados.length}</b> remito(s) ya tienen cobros imputados, as\u00ed que no se tocan autom\u00e1ticamente (descuadrar\u00eda lo ya cargado). Revisalos a mano:
+        <ul style="margin:6px 0 0;padding-left:18px">${cand.tocados.map(r=>`<li>${esc(r.cliente)} \u00b7 ${r.m.numero?'N\u00ba '+esc(r.m.numero)+' \u00b7 ':''}${dShow(r.m.fecha)} \u00b7 remito ${fmt(r.m.importe)} \u00b7 cobrado ${fmt(r.cobrado)}${r.saldo>0.5?' \u00b7 falta '+fmt(r.saldo):''}</li>`).join('')}</ul></div>`:''}
+    </div>`:''}
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">
       <div class="kpi"><div class="lab">Vendido por ${NIT_VEND}</div><div class="val num">${fmt(S(fil,'venta'))}</div><div class="meta">${fil.length} remito${fil.length===1?'':'s'} \u00b7 precio de lista</div></div>
       <div class="kpi"><div class="lab">Comisi\u00f3n ${(NIT_PCT*100)}%</div><div class="val num">${fmt(S(fil,'com'))}</div><div class="meta">se la lleva ${NIT_VEND}</div></div>
