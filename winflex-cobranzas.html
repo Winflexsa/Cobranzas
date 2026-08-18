@@ -1819,7 +1819,12 @@ function openEfeCli(i){
 /* ---------- estado de entrega y clasificación ---------- */
 let EFE_SAVE_T=null;
 function efeSaveDiferido(){ if(EFE_SAVE_T)clearTimeout(EFE_SAVE_T); EFE_SAVE_T=setTimeout(()=>{EFE_SAVE_T=null;saveToCloud()},2000) }
-window.addEventListener('beforeunload',()=>{if(EFE_SAVE_T){clearTimeout(EFE_SAVE_T);EFE_SAVE_T=null;saveToCloud()}});
+window.addEventListener('beforeunload',e=>{
+  if(EFE_SAVE_T){clearTimeout(EFE_SAVE_T);EFE_SAVE_T=null;saveToCloud()}
+  /* Un guardado en curso NO sobrevive al cierre de la ventana (es lectura+fusion+escritura
+     asincronica). Si esta guardando, frenamos la salida y avisamos. */
+  if(saving||savePending){e.preventDefault();e.returnValue='Hay cambios guardandose. Espera a que diga "En la nube" antes de cerrar.';return e.returnValue}
+});
 /* reabre la ficha del cliente conservando la posición del scroll */
 function efeReabrirCli(i){
   const cont=$('efeCliBody')?$('efeCliBody').closest('.body'):null;
@@ -1831,7 +1836,7 @@ function efeReabrirCli(i){
 function efeChequeEstado(id,ok){
   const m=efeList().find(x=>x.id===id); if(!m)return;
   m.chequeOk=ok; m.updatedAt=NOW();
-  efeSaveDiferido(); renderEfectivo(); renderTotal();
+  saveToCloud(); renderEfectivo(); renderTotal();
   toast(ok?'Cheque marcado como acreditado':'Cheque marcado como rechazado: vuelve a sumar al saldo','ok');
   if(EFE_SEL){const i=EFE_CACHE.findIndex(c=>c.nombre===EFE_SEL); if(i>=0)efeReabrirCli(i)}
 }
@@ -1841,7 +1846,7 @@ function efeToggleEntrega(id){
   m.entregado=(m.entregado===false);
   m.fechaEntrega=m.entregado?todayISO():null;
   m.updatedAt=NOW();
-  efeSaveDiferido();renderEfectivo();renderTotal();
+  saveToCloud();renderEfectivo();renderTotal();
   toast(m.entregado?'Marcado como entregado':'Marcado como pendiente de entrega','ok');
   const i=EFE_CACHE.findIndex(c=>c.nombre===n); if(i>=0)efeReabrirCli(i);
 }
