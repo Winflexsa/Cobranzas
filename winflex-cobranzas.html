@@ -844,12 +844,15 @@ async function saveToCloud(){
     const ajenos = canon(merged)!==antes;      // ¿entró algo de otra persona?
     STATE=merged;
     STATE.meta=STATE.meta||{};STATE.meta.lastUpdate=NOW();STATE.meta.lastUser=CURRENT_USER;
-    const r=await fetch(binURL(),{method:'PUT',headers:{...binHeaders(),'X-Bin-Versioning':'true'},body:JSON.stringify(STATE)});if(!r.ok)throw new Error('HTTP '+r.status);
+    /* Versionado APAGADO: el bin llego al tope de 1000 versiones y JSONBin devolvia
+       403 en cada guardado. Con 'false' actualiza el bin sin crear version nueva.  */
+    const r=await fetch(binURL(),{method:'PUT',headers:{...binHeaders(),'X-Bin-Versioning':'false'},body:JSON.stringify(STATE)});
+    if(!r.ok){let det='';try{det=' · '+(await r.text()).slice(0,140)}catch(_){}throw new Error('HTTP '+r.status+det)}
     setBase(STATE);saveLocal();
     try{localStorage.setItem('wfc_sync',NOW())}catch(_){}   // avisa a las otras ventanas
     setCloud('ok','En la nube · '+horaCorta());
     if(ajenos){renderAll();toast('Guardado · se incorporaron cambios de '+((cur.meta&&cur.meta.lastUser)||'otro usuario'),'ok')}
-  }catch(e){setCloud('bad','Error al guardar');toast('No se pudo guardar: '+e.message,'bad')}
+  }catch(e){setCloud('bad','Error al guardar: '+String(e.message||'').slice(0,40));toast('No se pudo guardar: '+e.message,'bad')}
   finally{saving=false;if(savePending){savePending=false;saveToCloud()}}
 }
 function saveConfig(){const b=$('cfgBin').value.trim(),k=$('cfgKey').value.trim();if(b)localStorage.setItem(LS.bin,b);else localStorage.removeItem(LS.bin);if(k)localStorage.setItem(LS.key,k);else localStorage.removeItem(LS.key);toast('Configuración guardada');if(b&&k)loadFromCloud(true)}
