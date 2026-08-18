@@ -62,6 +62,19 @@
   </div>
 
   <div class="card">
+    <h2>Datos guardados en esta PC</h2>
+    <p class="hint" style="margin-top:0">Cada máquina guarda una copia local de la última vez que us&oacute; Cobranzas. Si esta PC no abri&oacute; la app despu&eacute;s del problema, ac&aacute; puede estar la copia buena.</p>
+    <div id="loc"></div>
+  </div>
+
+  <div class="card">
+    <h2>Restaurar desde un archivo</h2>
+    <p class="hint" style="margin-top:0">Sirve para el respaldo que baj&oacute; la app o para una copia bajada desde ac&aacute;.</p>
+    <input type="file" id="fArch" accept=".json,application/json">
+    <div id="arch"></div>
+  </div>
+
+  <div class="card">
     <h2>Recuperar una versión</h2>
     <p class="hint" style="margin-top:0">Busca las versiones que quedaron guardadas en el bin y muestra qué tiene cada una. Restaurar reemplaza el contenido actual por el de la versión elegida.</p>
     <button id="bScan" class="p">Buscar versiones</button>
@@ -251,6 +264,57 @@ async function restaurar(v){
     if(r.ok){$('lect').textContent='Leyendo…'; leer()}
   }catch(e){alert('Cortó: '+e.message); log('ERROR al restaurar: '+e.message)}
 }
+/* ---- copia local de esta PC ---- */
+function stats(rec){return {bytes:new Blob([JSON.stringify(rec)]).size,
+  c:(rec.clientes||[]).length, f:(rec.comprobantes||rec.facturas||[]).length,
+  e:(rec.efectivo||[]).length, upd:(rec.meta&&rec.meta.lastUpdate)||'—', who:(rec.meta&&rec.meta.lastUser)||'—'}}
+function fichaHTML(t,st){return row(t, kb(st.bytes)+' · '+st.c+' cli · '+st.f+' comp · '+st.e+' efe<br>'+String(st.upd).replace('T',' ').slice(0,16)+' · '+st.who, st.e>0?'ok':'warn')}
+let LOCAL_REC=null, ARCH_REC=null;
+function verLocal(){
+  let rec=null;
+  try{rec=JSON.parse(localStorage.getItem('wfc_data'))}catch(_){}
+  if(!rec||!rec.clientes){$('loc').innerHTML=row('Copia local','no hay','bad');log('\nCopia local: no hay');return}
+  LOCAL_REC=rec; const st=stats(rec);
+  log('\n--- COPIA LOCAL DE ESTA PC ---');
+  log(kb(st.bytes)+' · clientes '+st.c+' · comprobantes '+st.f+' · efectivo '+st.e+' · '+st.upd+' · '+st.who);
+  $('loc').innerHTML = fichaHTML('Copia local', st) +
+    '<div style="text-align:right;margin-top:8px"><button onclick="bajarRec(LOCAL_REC,\'local\')">Bajar copia</button>'+
+    '<button class="p" onclick="subirRec(LOCAL_REC,\'la copia de esta PC\')">Subir a la nube</button></div>';
+}
+function bajarRec(rec,nombre){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(rec)],{type:'application/json'}));
+  a.download='cobranzas-'+nombre+'.json'; a.click();
+}
+async function subirRec(rec,desc){
+  if(!rec){alert('No hay datos');return}
+  const st=stats(rec);
+  if(!confirm('Subir '+desc+':\n\n'+st.c+' clientes · '+st.f+' comprobantes · '+st.e+' movimientos de efectivo\n\nReemplaza lo que hay en la nube ahora.\n\n¿Seguir?'))return;
+  try{
+    const r=await fetch('https://api.jsonbin.io/v3/b/'+BIN,{method:'PUT',
+      headers:Object.assign({},H(),{'X-Bin-Versioning':'false'}),body:JSON.stringify(rec)});
+    const txt=await r.text();
+    log('\n--- SUBIDA ('+desc+') ---'); log('HTTP '+r.status+' · '+txt.slice(0,200));
+    alert(r.ok?'Subido. Ahora s&iacute; abr&iacute; Cobranzas y verific&aacute;.':'No se pudo subir: HTTP '+r.status);
+    if(r.ok){$('lect').textContent='Leyendo…'; leer()}
+  }catch(e){alert('Cortó: '+e.message); log('ERROR al subir: '+e.message)}
+}
+$('fArch').onchange=e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const fr=new FileReader();
+  fr.onload=()=>{
+    let rec=null; try{rec=JSON.parse(fr.result)}catch(_){}
+    if(rec&&rec.record&&rec.record.clientes)rec=rec.record;   // por si el archivo trae el envoltorio de JSONBin
+    if(!rec||!rec.clientes){$('arch').innerHTML=row('Archivo','no tiene datos de Cobranzas','bad');return}
+    ARCH_REC=rec; const st=stats(rec);
+    log('\n--- ARCHIVO '+f.name+' ---');
+    log(kb(st.bytes)+' · clientes '+st.c+' · comprobantes '+st.f+' · efectivo '+st.e+' · '+st.upd);
+    $('arch').innerHTML = fichaHTML(f.name, st) +
+      '<div style="text-align:right;margin-top:8px"><button class="p" onclick="subirRec(ARCH_REC,\'el archivo\')">Subir a la nube</button></div>';
+  };
+  fr.readAsText(f);
+};
+verLocal();
 $('bScan').onclick=escanear;
 $('bCount').onclick=contar;
 $('bDel').onclick=borrarVersiones;
