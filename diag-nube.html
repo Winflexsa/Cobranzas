@@ -279,7 +279,18 @@ function verLocal(){
   log(kb(st.bytes)+' · clientes '+st.c+' · comprobantes '+st.f+' · efectivo '+st.e+' · '+st.upd+' · '+st.who);
   $('loc').innerHTML = fichaHTML('Copia local', st) +
     '<div style="text-align:right;margin-top:8px"><button onclick="bajarRec(LOCAL_REC,\'local\')">Bajar copia</button>'+
+    '<button onclick="limpiarLocal()" style="border-color:var(--bad);color:var(--bad)">Borrar copia de esta PC</button>'+
     '<button class="p" onclick="subirRec(LOCAL_REC,\'la copia de esta PC\')">Subir a la nube</button></div>';
+}
+function limpiarLocal(){
+  /* Borra SOLO la copia local de esta maquina. La nube no se toca: al abrir
+     Cobranzas, la app baja los datos buenos de nuevo. Evita que una PC con
+     datos viejos vuelva a pisar la nube. */
+  if(!confirm('Se borra la copia guardada en ESTA computadora.\n\nLa nube no se toca: al abrir Cobranzas se baja todo de nuevo.\n\n¿Seguir?'))return;
+  try{localStorage.removeItem('wfc_data'); LOCAL_REC=null;
+      $('loc').innerHTML=row('Copia local','borrada · al abrir la app baja de la nube','ok');
+      log('\nCopia local borrada en esta PC');
+  }catch(e){alert('No se pudo borrar: '+e.message)}
 }
 function bajarRec(rec,nombre){
   const a=document.createElement('a');
