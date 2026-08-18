@@ -26,6 +26,8 @@
   pre{background:#11201a;color:#d8e8df;padding:12px;border-radius:8px;overflow:auto;
       font-size:12.5px;line-height:1.45;white-space:pre-wrap;word-break:break-all;margin:0}
   .hint{font-size:13px;color:var(--mut);margin-top:10px}
+  input{width:100%;padding:11px 12px;margin-bottom:8px;border:1px solid var(--line);border-radius:8px;
+        font:14px/1 ui-monospace,Menlo,Consolas,monospace}
 </style>
 </head>
 <body>
@@ -52,6 +54,14 @@
   </div>
 
   <div class="card">
+    <h2>Historial de versiones</h2>
+    <p class="hint" style="margin-top:0">El bin llegó al tope de 1000 versiones y por eso JSONBin rechaza cada guardado. Borrar el historial libera el cupo. <b>No toca los datos actuales</b>: sólo se van las copias viejas.</p>
+    <button id="bCount">Contar versiones</button>
+    <button id="bDel" style="border-color:var(--bad);color:var(--bad)">Borrar el historial</button>
+    <div id="ver"></div>
+  </div>
+
+  <div class="card">
     <h2>Detalle técnico</h2>
     <pre id="log">Esperando…</pre>
     <button id="copy" style="margin-top:10px">Copiar detalle</button>
@@ -62,8 +72,8 @@
 <script>
 const LS={bin:'wfc_bin',key:'wfc_key'};
 const $=id=>document.getElementById(id);
-const BIN=localStorage.getItem(LS.bin)||'';
-const KEY=localStorage.getItem(LS.key)||'';
+let BIN=localStorage.getItem(LS.bin)||'';
+let KEY=localStorage.getItem(LS.key)||'';
 let LINEAS=[], RECORD=null;
 
 function log(t){LINEAS.push(t);$('log').textContent=LINEAS.join('\n')}
@@ -73,16 +83,34 @@ function kb(n){return (n/1024).toFixed(1)+' KB'}
 /* Muestra los headers que el navegador nos deja leer (CORS). */
 function heads(r){const o={};r.headers.forEach((v,k)=>o[k]=v);return o}
 
-$('cfg').innerHTML =
-  row('Bin', BIN ? BIN : 'FALTA', BIN?'':'bad') +
-  row('Clave', KEY ? 'presente ('+KEY.length+' caracteres)' : 'FALTA', KEY?'':'bad') +
-  row('Navegador', navigator.userAgent.slice(0,60)+'…');
+function pintarCfg(){
+  $('cfg').innerHTML =
+    row('Bin', BIN ? BIN : 'FALTA', BIN?'':'bad') +
+    row('Clave', KEY ? 'presente ('+KEY.length+' caracteres)' : 'FALTA', KEY?'':'bad') +
+    row('Navegador', navigator.userAgent.slice(0,60)+'…');
+  /* Si la pagina se abre desde Descargas (file://) no comparte los datos guardados
+     de winflexsa.github.io: se cargan a mano desde la pestana Config de la app. */
+  if(!BIN||!KEY){
+    $('cfg').innerHTML +=
+      '<div class="hint" style="margin:12px 0 8px">Esta p&aacute;gina no ve la configuraci&oacute;n. Si la abriste desde Descargas es normal: copi&aacute; los dos valores de la pesta&ntilde;a <b>Config</b> de Cobranzas y peg&aacute;los ac&aacute;. No se guardan en ning&uacute;n lado.</div>'+
+      '<input id="mBin" placeholder="Bin" autocomplete="off">'+
+      '<input id="mKey" placeholder="Clave (X-Master-Key)" autocomplete="off">'+
+      '<button id="mGo" class="p">Usar estos datos</button>';
+    $('mGo').onclick=()=>{
+      BIN=$('mBin').value.trim(); KEY=$('mKey').value.trim();
+      if(!BIN||!KEY){alert('Faltan datos');return}
+      LINEAS=[]; log('Bin y clave cargados a mano'); log('Fecha de la prueba: '+new Date().toISOString());
+      pintarCfg(); $('lect').textContent='Leyendo…'; $('esc').innerHTML=''; leer();
+    };
+  }
+}
+pintarCfg();
 
 log('Bin: '+(BIN||'(vacío)'));
 log('Clave: '+(KEY?KEY.length+' caracteres':'(vacía)'));
 log('Fecha de la prueba: '+new Date().toISOString());
 
-const H={'Content-Type':'application/json','X-Master-Key':KEY,'X-Bin-Meta':'false'};
+function H(){return {'Content-Type':'application/json','X-Master-Key':KEY,'X-Bin-Meta':'false'}}
 
 async function leer(){
   if(!BIN||!KEY){
@@ -92,7 +120,7 @@ async function leer(){
   }
   try{
     const t0=Date.now();
-    const r=await fetch('https://api.jsonbin.io/v3/b/'+BIN+'/latest',{headers:H});
+    const r=await fetch('https://api.jsonbin.io/v3/b/'+BIN+'/latest',{headers:H()});
     const txt=await r.text();
     log('\n--- LECTURA ---');
     log('HTTP '+r.status+' '+r.statusText+'  ('+(Date.now()-t0)+' ms)');
@@ -128,7 +156,7 @@ async function escribir(versionado){
   log('\n--- ESCRITURA '+etiqueta+' ---');
   try{
     /* Releemos justo antes para no pisar lo que haya cargado otro en el medio. */
-    const rl=await fetch('https://api.jsonbin.io/v3/b/'+BIN+'/latest',{headers:H});
+    const rl=await fetch('https://api.jsonbin.io/v3/b/'+BIN+'/latest',{headers:H()});
     if(!rl.ok)throw new Error('no se pudo releer antes de escribir: HTTP '+rl.status);
     const dl=await rl.json();
     const cuerpo=JSON.stringify(dl.record||dl);
@@ -136,7 +164,7 @@ async function escribir(versionado){
     const t0=Date.now();
     const r=await fetch('https://api.jsonbin.io/v3/b/'+BIN,{
       method:'PUT',
-      headers:Object.assign({},H,{'X-Bin-Versioning':versionado?'true':'false'}),
+      headers:Object.assign({},H(),{'X-Bin-Versioning':versionado?'true':'false'}),
       body:cuerpo
     });
     const txt=await r.text();
@@ -152,6 +180,29 @@ async function escribir(versionado){
   $('b1').disabled=false; $('b2').disabled=false;
 }
 
+async function contar(){
+  try{
+    const r=await fetch('https://api.jsonbin.io/v3/b/'+BIN+'/versions/count',{headers:H()});
+    const txt=await r.text();
+    log('\n--- VERSIONES ---'); log('HTTP '+r.status+' · '+txt.slice(0,300));
+    let n='?'; try{const d=JSON.parse(txt); n=(d.record&&d.record.versionCount)!=null?d.record.versionCount:((d.metadata&&d.metadata.versionCount)!=null?d.metadata.versionCount:'?')}catch(_){}
+    $('ver').innerHTML=row('Versiones guardadas', n, (n>=1000)?'bad':'ok');
+  }catch(e){log('ERROR al contar versiones: '+e.message); $('ver').innerHTML=row('Versiones','no se pudo consultar','bad')}
+}
+async function borrarVersiones(){
+  if(!confirm('Se borra el historial de versiones viejas del bin.\n\nLos datos actuales NO se tocan: siguen tal cual están.\n\n¿Seguir?'))return;
+  $('bDel').disabled=true;
+  try{
+    const r=await fetch('https://api.jsonbin.io/v3/b/'+BIN+'/versions',{method:'DELETE',headers:H()});
+    const txt=await r.text();
+    log('\n--- BORRADO DE VERSIONES ---'); log('HTTP '+r.status+' · '+txt.slice(0,300));
+    $('ver').innerHTML+=row('Borrado','HTTP '+r.status+(r.ok?' · listo':' · falló'), r.ok?'ok':'bad');
+    if(r.ok){$('ver').innerHTML+=row('Siguiente paso','volvé a probar el guardado','ok'); contar()}
+  }catch(e){log('ERROR al borrar versiones: '+e.message); $('ver').innerHTML+=row('Borrado','cortó: '+e.message,'bad')}
+  $('bDel').disabled=false;
+}
+$('bCount').onclick=contar;
+$('bDel').onclick=borrarVersiones;
 $('b1').onclick=()=>escribir(true);
 $('b2').onclick=()=>escribir(false);
 $('copy').onclick=()=>{navigator.clipboard.writeText($('log').textContent).then(()=>{$('copy').textContent='Copiado'; setTimeout(()=>$('copy').textContent='Copiar detalle',1500)})};
