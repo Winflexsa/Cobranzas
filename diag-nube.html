@@ -62,6 +62,13 @@
   </div>
 
   <div class="card">
+    <h2>Recuperar una versión</h2>
+    <p class="hint" style="margin-top:0">Busca las versiones que quedaron guardadas en el bin y muestra qué tiene cada una. Restaurar reemplaza el contenido actual por el de la versión elegida.</p>
+    <button id="bScan" class="p">Buscar versiones</button>
+    <div id="rec"></div>
+  </div>
+
+  <div class="card">
     <h2>Detalle técnico</h2>
     <pre id="log">Esperando…</pre>
     <button id="copy" style="margin-top:10px">Copiar detalle</button>
@@ -201,6 +208,50 @@ async function borrarVersiones(){
   }catch(e){log('ERROR al borrar versiones: '+e.message); $('ver').innerHTML+=row('Borrado','cortó: '+e.message,'bad')}
   $('bDel').disabled=false;
 }
+async function verVersion(v){
+  const r=await fetch('https://api.jsonbin.io/v3/b/'+BIN+'/'+v,{headers:H()});
+  if(!r.ok)return null;
+  const d=await r.json(); const rec=d.record||d;
+  if(!rec||!rec.clientes)return null;
+  return {v:v, rec:rec, bytes:new Blob([JSON.stringify(rec)]).size,
+          c:(rec.clientes||[]).length, f:(rec.comprobantes||rec.facturas||[]).length,
+          e:(rec.efectivo||[]).length, upd:(rec.meta&&rec.meta.lastUpdate)||'—', who:(rec.meta&&rec.meta.lastUser)||'—'};
+}
+async function escanear(){
+  $('bScan').disabled=true; $('rec').innerHTML='<div class="hint">Buscando…</div>';
+  log('\n--- BUSQUEDA DE VERSIONES ---');
+  let html='', hubo=false;
+  for(let v=0; v<=6; v++){
+    let info=null;
+    try{info=await verVersion(v)}catch(_){}
+    if(!info)continue;
+    hubo=true;
+    log('v'+v+': '+kb(info.bytes)+' · clientes '+info.c+' · comprobantes '+info.f+' · efectivo '+info.e+' · '+info.upd+' · '+info.who);
+    html+='<div class="row"><b>Versión '+v+'</b><span class="val">'+kb(info.bytes)+' · '+info.c+' cli · '+info.f+' comp · '+info.e+' efe<br>'+String(info.upd).replace('T',' ').slice(0,16)+' · '+info.who+'</span></div>'+
+          '<div style="text-align:right;margin:4px 0 14px"><button onclick="bajar('+v+')">Bajar copia</button><button class="p" onclick="restaurar('+v+')">Restaurar esta</button></div>';
+  }
+  $('rec').innerHTML = hubo?html:'<div class="hint">No se encontraron versiones guardadas.</div>';
+  $('bScan').disabled=false;
+}
+async function bajar(v){
+  const info=await verVersion(v); if(!info){alert('No se pudo leer esa versión');return}
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(info.rec)],{type:'application/json'}));
+  a.download='cobranzas-v'+v+'.json'; a.click();
+}
+async function restaurar(v){
+  const info=await verVersion(v); if(!info){alert('No se pudo leer esa versión');return}
+  if(!confirm('Restaurar la versión '+v+':\n\n'+info.c+' clientes · '+info.f+' comprobantes · '+info.e+' movimientos de efectivo\n\nEsto reemplaza el contenido actual del bin.\n\n¿Seguir?'))return;
+  try{
+    const r=await fetch('https://api.jsonbin.io/v3/b/'+BIN,{method:'PUT',
+      headers:Object.assign({},H(),{'X-Bin-Versioning':'false'}),body:JSON.stringify(info.rec)});
+    const txt=await r.text();
+    log('\n--- RESTAURACION v'+v+' ---'); log('HTTP '+r.status+' · '+txt.slice(0,200));
+    alert(r.ok?'Restaurado. Cerrá y volvé a abrir Cobranzas.':'No se pudo restaurar: HTTP '+r.status);
+    if(r.ok){$('lect').textContent='Leyendo…'; leer()}
+  }catch(e){alert('Cortó: '+e.message); log('ERROR al restaurar: '+e.message)}
+}
+$('bScan').onclick=escanear;
 $('bCount').onclick=contar;
 $('bDel').onclick=borrarVersiones;
 $('b1').onclick=()=>escribir(true);
