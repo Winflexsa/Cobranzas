@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnóstico de nube · Cobranzas</title>
+<style>
+  :root{--ok:#15a463;--bad:#d64545;--warn:#c98a00;--bg:#f7f8f7;--line:#dfe3df;--txt:#1c2320;--mut:#6b7670}
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px;background:var(--bg);color:var(--txt);
+       font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .wrap{max-width:760px;margin:0 auto}
+  h1{font-size:19px;margin:0 0 2px}
+  .sub{color:var(--mut);font-size:13px;margin-bottom:18px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:12px}
+  .card h2{font-size:14px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:0 0 10px}
+  .row{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed var(--line)}
+  .row:last-child{border-bottom:0}
+  .row b{font-weight:600}
+  .val{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;text-align:right;word-break:break-all}
+  .ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+  button{font:600 15px/1 inherit;padding:12px 16px;border-radius:8px;border:1px solid var(--line);
+         background:#fff;cursor:pointer;margin:0 8px 8px 0}
+  button.p{background:var(--ok);border-color:var(--ok);color:#fff}
+  button:disabled{opacity:.5;cursor:default}
+  pre{background:#11201a;color:#d8e8df;padding:12px;border-radius:8px;overflow:auto;
+      font-size:12.5px;line-height:1.45;white-space:pre-wrap;word-break:break-all;margin:0}
+  .hint{font-size:13px;color:var(--mut);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Diagnóstico de nube</h1>
+  <div class="sub">Abrí esta página en la misma computadora y el mismo navegador donde usás Cobranzas.</div>
+
+  <div class="card">
+    <h2>Configuración</h2>
+    <div id="cfg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Lectura</h2>
+    <div id="lect">Leyendo…</div>
+  </div>
+
+  <div class="card">
+    <h2>Prueba de escritura</h2>
+    <p class="hint" style="margin-top:0">Vuelve a escribir exactamente los mismos datos que acaba de leer. No cambia nada: sirve para ver por qué falla el guardado.</p>
+    <button id="b1" class="p" disabled>Probar guardado (como la app)</button>
+    <button id="b2" disabled>Probar guardado sin versionado</button>
+    <div id="esc"></div>
+  </div>
+
+  <div class="card">
+    <h2>Detalle técnico</h2>
+    <pre id="log">Esperando…</pre>
+    <button id="copy" style="margin-top:10px">Copiar detalle</button>
+    <div class="hint">Copiá esto y mandáselo a Matías.</div>
+  </div>
+</div>
+
+<script>
+const LS={bin:'wfc_bin',key:'wfc_key'};
+const $=id=>document.getElementById(id);
+const BIN=localStorage.getItem(LS.bin)||'';
+const KEY=localStorage.getItem(LS.key)||'';
+let LINEAS=[], RECORD=null;
+
+function log(t){LINEAS.push(t);$('log').textContent=LINEAS.join('\n')}
+function row(k,v,cls){return '<div class="row"><b>'+k+'</b><span class="val '+(cls||'')+'">'+v+'</span></div>'}
+function kb(n){return (n/1024).toFixed(1)+' KB'}
+
+/* Muestra los headers que el navegador nos deja leer (CORS). */
+function heads(r){const o={};r.headers.forEach((v,k)=>o[k]=v);return o}
+
+$('cfg').innerHTML =
+  row('Bin', BIN ? BIN : 'FALTA', BIN?'':'bad') +
+  row('Clave', KEY ? 'presente ('+KEY.length+' caracteres)' : 'FALTA', KEY?'':'bad') +
+  row('Navegador', navigator.userAgent.slice(0,60)+'…');
+
+log('Bin: '+(BIN||'(vacío)'));
+log('Clave: '+(KEY?KEY.length+' caracteres':'(vacía)'));
+log('Fecha de la prueba: '+new Date().toISOString());
+
+const H={'Content-Type':'application/json','X-Master-Key':KEY,'X-Bin-Meta':'false'};
+
+async function leer(){
+  if(!BIN||!KEY){
+    $('lect').innerHTML=row('Estado','sin configuración en esta PC','bad');
+    log('CORTE: no hay bin/clave guardados en este navegador.');
+    return;
+  }
+  try{
+    const t0=Date.now();
+    const r=await fetch('https://api.jsonbin.io/v3/b/'+BIN+'/latest',{headers:H});
+    const txt=await r.text();
+    log('\n--- LECTURA ---');
+    log('HTTP '+r.status+' '+r.statusText+'  ('+(Date.now()-t0)+' ms)');
+    log('Headers: '+JSON.stringify(heads(r)));
+    if(!r.ok){
+      $('lect').innerHTML=row('Estado','HTTP '+r.status,'bad');
+      log('Respuesta: '+txt.slice(0,500));
+      return;
+    }
+    const d=JSON.parse(txt); RECORD=d.record||d;
+    const c=(RECORD.clientes||[]).length, f=(RECORD.comprobantes||RECORD.facturas||[]).length, e=(RECORD.efectivo||[]).length;
+    const bytes=new Blob([JSON.stringify(RECORD)]).size;
+    const m=RECORD.meta||{};
+    $('lect').innerHTML =
+      row('Estado','HTTP 200 · lee bien','ok') +
+      row('Tamaño', kb(bytes), bytes>90*1024?'warn':'') +
+      row('Clientes', c) + row('Comprobantes', f) + row('Movimientos de efectivo', e) +
+      row('Último guardado', m.lastUpdate ? String(m.lastUpdate).replace('T',' ').slice(0,16) : '—') +
+      row('Lo guardó', m.lastUser || '—');
+    log('Tamaño: '+bytes+' bytes ('+kb(bytes)+')');
+    log('Clientes '+c+' · Comprobantes '+f+' · Efectivo '+e);
+    log('meta.lastUpdate: '+(m.lastUpdate||'—')+' · meta.lastUser: '+(m.lastUser||'—'));
+    $('b1').disabled=false; $('b2').disabled=false;
+  }catch(err){
+    $('lect').innerHTML=row('Estado','no se pudo leer','bad');
+    log('ERROR de lectura: '+err.message);
+  }
+}
+
+async function escribir(versionado){
+  $('b1').disabled=true; $('b2').disabled=true;
+  const etiqueta = versionado?'CON versionado (como la app)':'SIN versionado';
+  log('\n--- ESCRITURA '+etiqueta+' ---');
+  try{
+    /* Releemos justo antes para no pisar lo que haya cargado otro en el medio. */
+    const rl=await fetch('https://api.jsonbin.io/v3/b/'+BIN+'/latest',{headers:H});
+    if(!rl.ok)throw new Error('no se pudo releer antes de escribir: HTTP '+rl.status);
+    const dl=await rl.json();
+    const cuerpo=JSON.stringify(dl.record||dl);
+
+    const t0=Date.now();
+    const r=await fetch('https://api.jsonbin.io/v3/b/'+BIN,{
+      method:'PUT',
+      headers:Object.assign({},H,{'X-Bin-Versioning':versionado?'true':'false'}),
+      body:cuerpo
+    });
+    const txt=await r.text();
+    log('HTTP '+r.status+' '+r.statusText+'  ('+(Date.now()-t0)+' ms)');
+    log('Headers: '+JSON.stringify(heads(r)));
+    log('Respuesta: '+txt.slice(0,600));
+    $('esc').innerHTML += row(etiqueta, 'HTTP '+r.status+(r.ok?' · guardó':' · falló'), r.ok?'ok':'bad');
+    if(!r.ok) $('esc').innerHTML += row('Dice', txt.slice(0,160)||'(sin texto)','bad');
+  }catch(err){
+    log('ERROR de escritura: '+err.message);
+    $('esc').innerHTML += row(etiqueta,'cortó: '+err.message,'bad');
+  }
+  $('b1').disabled=false; $('b2').disabled=false;
+}
+
+$('b1').onclick=()=>escribir(true);
+$('b2').onclick=()=>escribir(false);
+$('copy').onclick=()=>{navigator.clipboard.writeText($('log').textContent).then(()=>{$('copy').textContent='Copiado'; setTimeout(()=>$('copy').textContent='Copiar detalle',1500)})};
+
+leer();
+</script>
+</body>
+</html>
