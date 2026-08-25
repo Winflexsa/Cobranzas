@@ -382,6 +382,10 @@ body.modo-modulo nav{display:none}
         <option value="sinpago">Por d&iacute;as sin pagar</option>
         <option value="nombre">Por nombre</option>
       </select>
+      <select class="filter" id="efeVerSaldo" onchange="renderEfectivo()">
+        <option value="saldo">Solo con saldo</option>
+        <option value="todos">Todos los clientes</option>
+      </select>
       <select class="filter" id="efeFVend" onchange="renderEfectivo()"><option value="">Todos los vendedores</option></select>
       <select class="filter" id="efeFProd" onchange="renderEfectivo()"><option value="">Todos los productos</option></select>
       <button class="btn sm" onclick="openEfeMov()">+ Movimiento</button>
@@ -392,6 +396,7 @@ body.modo-modulo nav{display:none}
       <button class="btn ghost sm" onclick="exportEfeJSON()">&darr; Respaldo</button>
     </div>
     <div id="efeFiltroInfo"></div>
+    <div id="efeOcultos"></div>
     <div id="efePreview"></div>
     <div class="tablewrap"><table>
       <thead><tr><th>Cliente</th><th class="r" id="efeThPend">Pendiente</th><th class="r">%</th><th class="r">D&iacute;as m&aacute;x.</th><th class="r">&Uacute;lt. pago</th><th>Antig&uuml;edad</th></tr></thead>
@@ -1613,6 +1618,16 @@ function efeCalc(){
 }
 
 /* ---------- render ---------- */
+/* Cliente "vivo": tiene saldo o algo sin resolver. Los saldados en cero no se
+   listan salvo que elijas "Todos los clientes". */
+function efeVivo(c){
+  return Math.abs(c.pendiente)>0.5
+    || c.porEntregar>0.5
+    || c.valores>0.5
+    || (c.chequesPorConfirmar||[]).length>0
+    || (c.rechazados||[]).length>0
+    || (c.sinAplicar>0.5 && c.remitos.length>0);
+}
 function renderEfectivo(){
   if(!$('efeBody'))return;
   const C=efeCalc();
@@ -1700,6 +1715,11 @@ function renderEfectivo(){
   const q=($('efeSearch').value||'').toLowerCase(), ord=$('efeOrden').value;
   let lista=C.filter(c=>c.nombre.toLowerCase().includes(q));
   if(fv||fp)lista=lista.filter(c=>c.filtrado>0.5||c.filtEnt>0.5);
+  const verTodos=$('efeVerSaldo')&&$('efeVerSaldo').value==='todos';
+  const ocultos=verTodos?0:lista.filter(c=>!efeVivo(c)).length;
+  if(!verTodos)lista=lista.filter(efeVivo);
+  if($('efeOcultos'))$('efeOcultos').innerHTML=ocultos
+    ? `<div class="hint" style="margin:6px 0 0">${ocultos} cliente(s) en cero no se muestran. <button class="mini" onclick="$('efeVerSaldo').value='todos';renderEfectivo()">Ver todos</button></div>` : '';
   lista.sort((a,b)=> ord==='nombre'?a.nombre.localeCompare(b.nombre)
     : ord==='viejo'?(b.diasMax==null?-1:b.diasMax)-(a.diasMax==null?-1:a.diasMax)
     : ord==='sinpago'?(b.diasSinPago==null?9999:b.diasSinPago)-(a.diasSinPago==null?9999:a.diasSinPago)
@@ -1709,6 +1729,9 @@ function renderEfectivo(){
   if(!efeList().length){
     $('efeBody').innerHTML=`<tr><td colspan="6" class="empty">Todavía no hay movimientos cargados.
       <div class="hint" style="margin-top:10px">Importá el Excel de remitos internos, subí las planillas de remito o cargalos a mano con “+ Movimiento”.</div></td></tr>`;
+  } else if(!lista.length){
+    $('efeBody').innerHTML=`<tr><td colspan="6" class="empty">Ningún cliente con saldo pendiente.
+      <div class="hint" style="margin-top:10px">${ocultos?ocultos+' cliente(s) saldado(s) ocultos. ':''}Elegí “Todos los clientes” en el filtro de arriba para verlos igual.</div></td></tr>`;
   } else {
     $('efeBody').innerHTML=lista.map((c,i)=>{
       const s=c.agg.reduce((a,b)=>a+b,0)||1;
