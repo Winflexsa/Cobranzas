@@ -1600,10 +1600,20 @@ async function exportLunes(){
     d.rows.forEach(x=>{if(x.dd<0){const v=-x.dd;if(v<=30)ag.a+=x.s;else if(v<=60)ag.b+=x.s;else if(v<=90)ag.c+=x.s;else ag.d+=x.s}else if(x.dd===0)ag.h+=x.s;else if(x.dd<=7)ag.s+=x.s;else ag.q+=x.s});
     [['Vencido +90 días',ag.d,ROJO],['Vencido 61-90 días',ag.c,ROJO],['Vencido 31-60 días',ag.b,ROJO],['Vencido 1-30 días',ag.a,ROJO],['Vence hoy',ag.h,NAR],['Vence en 1-7 días',ag.s,NAR],['Vence en 8-'+LUNES_DIAS+' días',ag.q,NAR]].forEach(k=>kv(k[0],k[1],true,k[2]));
     r++;
-    sec('Ranking por cliente');
-    ['Cliente','Vencido','A vencer','Total','Mayor atraso'].forEach((h,i)=>{const c=ws.getCell(r,i+2);c.value=h;c.fill=hdrFill;c.font=hdrFont;c.border=box;c.alignment={horizontal:i?'right':'left'}});r++;
-    d.grupos.forEach(g=>{const vals=[g.c.razonSocial+(situTxt(g.c)?' ('+situTxt(g.c)+')':''),g.venc,g.porV,g.tot,g.maxAtraso?g.maxAtraso+'d':'—'];vals.forEach((v,i)=>{const c=ws.getCell(r,i+2);c.value=v;c.border=box;c.font={size:10,bold:i===3,color:{argb:(i===1&&g.venc>0.5)?ROJO:'FF1B2233'}};c.alignment={horizontal:i?'right':'left'};if(i>=1&&i<=3)c.numFmt=money});r++});
-    const tr=r;ws.getCell(tr,2).value='TOTAL';ws.getCell(tr,2).font={bold:true};[[3,d.venc],[4,d.porV],[5,d.tot]].forEach(([col,val])=>{const c=ws.getCell(tr,col);c.value=val;c.numFmt=money;c.font={bold:true,color:{argb:VERDE}};c.alignment={horizontal:'right'};c.border={top:{style:'double',color:{argb:VERDE}}}});
+    sec('Detalle por cliente y vencimiento');
+    ws.getColumn(2).width=40;ws.getColumn(3).width=18;ws.getColumn(4).width=18;ws.getColumn(5).width=16;ws.getColumn(6).width=16;
+    ['Cliente / comprobante','Vencimiento','Días','Saldo','Estado'].forEach((h,i)=>{const c=ws.getCell(r,i+2);c.value=h;c.fill=hdrFill;c.font=hdrFont;c.border=box;c.alignment={horizontal:i===3?'right':'left'}});r++;
+    const CLIFILL={type:'pattern',pattern:'solid',fgColor:{argb:'FFE7F3EC'}};
+    d.grupos.forEach(g=>{
+      const cr=[g.c.razonSocial+(situTxt(g.c)?' ('+situTxt(g.c)+')':''),'Vencido '+fmt(g.venc),'A vencer '+fmt(g.porV),g.tot,g.items.length+' comprob.'+(g.maxAtraso?' · atraso máx. '+g.maxAtraso+'d':'')];
+      cr.forEach((v,i)=>{const c=ws.getCell(r,i+2);c.value=v;c.border=box;c.fill=CLIFILL;c.font={size:10.5,bold:true,color:{argb:(i===1&&g.venc>0.5)?ROJO:(i===2&&g.porV>0.5)?NAR:'FF1B2233'}};c.alignment={horizontal:i===3?'right':'left'};if(i===3)c.numFmt=money});r++;
+      g.items.forEach(x=>{const f=x.f;const m=EM[x.est]||EM.pendiente;
+        const vals=['    '+tipoLabel(f.tipo)+' '+(f.ptoVenta?f.ptoVenta+'-':'')+(f.numero||''),dShow(vencimientoDe(f)),diasTxt(x.dd),x.s,m.l];
+        vals.forEach((v,i)=>{const c=ws.getCell(r,i+2);c.value=v;c.border=box;c.font={size:10,bold:i===2,color:{argb:i===2?(x.dd<0?ROJO:NAR):'FF1B2233'}};c.alignment={horizontal:i===3?'right':'left'};if(i===3)c.numFmt=money});r++});
+    });
+    const tr=r;ws.getCell(tr,2).value='TOTAL';ws.getCell(tr,2).font={bold:true};
+    [[3,'Vencido '+fmt(d.venc)],[4,'A vencer '+fmt(d.porV)]].forEach(([col,val])=>{const c=ws.getCell(tr,col);c.value=val;c.font={bold:true,color:{argb:col===3?ROJO:NAR}};c.border={top:{style:'double',color:{argb:VERDE}}}});
+    {const c=ws.getCell(tr,5);c.value=d.tot;c.numFmt=money;c.font={bold:true,color:{argb:VERDE}};c.alignment={horizontal:'right'};c.border={top:{style:'double',color:{argb:VERDE}}}}
 
     /* ===== POR CLIENTE ===== */
     const cc=[{h:'Cliente',w:32},{h:'CUIT',w:14},{h:'Código',w:9},{h:'Situación',w:11},{h:'Condición',w:10},{h:'Contacto',w:18},{h:'Teléfono',w:16},{h:'Email',w:26},
