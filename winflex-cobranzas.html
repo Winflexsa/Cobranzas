@@ -223,6 +223,13 @@ body.modo-modulo nav{display:none}
   .clicard.fuera{opacity:.93}
   .situ-sel{padding:8px 10px;border-radius:9px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:12.5px;font-weight:600;cursor:pointer}
   .mini.on-inc{color:#fff;background:var(--inc);border-color:var(--inc)}
+  .lunes-box{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:var(--r);padding:13px 16px;margin:0 0 12px}
+  .lunes-box.pend{border-left-color:var(--venc);background:#fff7f7}
+  .lunes-box .lt{font-weight:800;font-size:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .lunes-box .lm{font-size:12.5px;color:var(--muted);margin-top:4px}
+  .lunes-box .la{display:flex;gap:8px;flex-wrap:wrap}
+  .lpill{font-size:10.5px;font-weight:800;letter-spacing:.4px;padding:3px 8px;border-radius:999px}
+  .lpill.bad{background:var(--venc);color:#fff}.lpill.ok{background:#e7f3ec;color:var(--accent-d)}
   .fuera-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 8px}
   .fuera-cell{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--border2);border-radius:var(--r);padding:13px 15px;cursor:pointer;display:flex;flex-direction:column;gap:2px}
   .fuera-cell:hover{border-color:var(--border2)}
@@ -303,6 +310,7 @@ body.modo-modulo nav{display:none}
   <!-- COBRANZA (cockpit) -->
   <section class="tab active" id="tab-resumen">
     <div class="kpis" id="kpis"></div>
+    <div id="lunesBox"></div>
     <div id="ncWarnBox"></div>
     <div id="fueraBox"></div>
     <div class="chips" id="cockChips"></div>
@@ -311,6 +319,7 @@ body.modo-modulo nav{display:none}
         <input id="cockSearch" placeholder="Buscar cliente…" oninput="renderCockpit()"></div>
       <select class="filter" id="cockVend" onchange="renderCockpit()"></select>
       <button class="btn sm" onclick="exportExcel()" title="Descargar informe Excel">📊 Informe</button>
+      <button class="btn ghost sm" onclick="exportLunes()" title="Listado semanal de Enrique: vencido + a vencer en 15 días">📅 Semanal Enrique</button>
     </div>
     <div id="cockList"></div>
     <div class="grid2" style="margin-top:8px">
@@ -913,6 +922,7 @@ function renderResumen(){
     if(saldo>0.5){porCobrar+=saldo;if(est==='vencida'||est==='parcial-venc')vencido+=saldo;else porVencer+=saldo}
     else if(saldo<-0.5){creditos+=-saldo}});
   porCobrar=Math.max(0,porCobrar-creditos);
+  renderLunesBox();
   $('kpis').innerHTML=`
     <div class="kpi por"><div class="bar"></div><div class="lab">Por cobrar</div><div class="val num">${fmtM(porCobrar)}</div><div class="meta">${fmtFull(porCobrar)}</div></div>
     <div class="kpi venc"><div class="bar"></div><div class="lab">Vencido</div><div class="val num" style="color:var(--venc)">${fmtM(vencido)}</div><div class="meta">${porCobrar?Math.round(vencido/porCobrar*100):0}% del saldo</div></div>
@@ -1506,6 +1516,135 @@ async function exportExcel(){
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Informe-Cobranzas-Winflex-'+todayISO()+'.xlsx';a.click();
     toast('Informe descargado','ok');
   }catch(e){toast('Error al generar el informe: '+e.message,'bad');}
+}
+
+/* ======================= SEMANAL POR VENDEDOR (lunes) ======================= */
+const LUNES_VEND='Enrique', LUNES_DIAS=15, LUNES_LS='wfc_lunes_ok';
+let LUNES_AVISADO=false;
+// lunes de la semana actual (si hoy es lunes, hoy)
+function lunesRef(){const d=new Date(todayISO()+'T00:00:00');const dow=(d.getDay()+6)%7;d.setDate(d.getDate()-dow);return d.toISOString().slice(0,10)}
+function ultimoSeg(c){const h=(c&&c.seguimiento&&c.seguimiento.historial)||[];return h.length?h[h.length-1]:null}
+function pagosTxt(f){return (f.pagos||[]).map(p=>dShow(p.fecha)+' '+fmt(p.monto)+((p.formas||[]).length?' ('+p.formas.map(x=>x.forma+(x.remito?' '+x.remito:'')).join(', ')+')':'')).join(' | ')}
+function lunesData(v){
+  v=v||LUNES_VEND;
+  const rows=[];const cred={};
+  STATE.comprobantes.forEach(f=>{
+    const c=getCliente(f.clienteId);if(!c||c.vendedor!==v)return;
+    const s=saldoDe(f);
+    if(isNC(f)){if(s<-0.5)cred[c.id]=(cred[c.id]||0)+(-s);return}
+    if(s<=0.5)return;
+    const dd=diasNum(f);if(dd>LUNES_DIAS)return;
+    rows.push({f,c,dd,s,est:estadoDe(f),fc:fueraCartera(f)});
+  });
+  const byC={};
+  rows.forEach(r=>{const g=byC[r.c.id]=byC[r.c.id]||{c:r.c,items:[],venc:0,porV:0,tot:0,maxAtraso:0,proxVto:null,credito:cred[r.c.id]||0};
+    g.items.push(r);g.tot+=r.s;
+    if(r.dd<0){g.venc+=r.s;g.maxAtraso=Math.max(g.maxAtraso,-r.dd)}else{g.porV+=r.s;const vt=vencimientoDe(r.f);if(!g.proxVto||vt<g.proxVto)g.proxVto=vt}});
+  const grupos=Object.values(byC).sort((a,b)=>b.venc-a.venc||b.tot-a.tot);
+  grupos.forEach(g=>g.items.sort((a,b)=>a.dd-b.dd));
+  const venc=grupos.reduce((a,g)=>a+g.venc,0),porV=grupos.reduce((a,g)=>a+g.porV,0);
+  return {rows,grupos,venc,porV,tot:venc+porV};
+}
+function renderLunesBox(){
+  const box=$('lunesBox');if(!box)return;
+  const d=lunesData();const ref=lunesRef();const hecho=localStorage.getItem(LUNES_LS)===ref;
+  if(!d.rows.length){box.innerHTML='';return}
+  const pend=!hecho;
+  box.innerHTML=`<div class="lunes-box${pend?' pend':''}">
+    <div class="li">
+      <div class="lt">📅 Semanal ${LUNES_VEND} · semana del ${dShow(ref)} ${pend?'<span class="lpill bad">PENDIENTE</span>':'<span class="lpill ok">descargado</span>'}</div>
+      <div class="lm">${d.grupos.length} cliente${d.grupos.length===1?'':'s'} · ${d.rows.length} comprob. · vencido <b style="color:var(--venc)">${fmtM(d.venc)}</b> · vence en ≤${LUNES_DIAS} días <b>${fmtM(d.porV)}</b> · total <b>${fmtM(d.tot)}</b></div>
+    </div>
+    <div class="la">
+      <button class="btn sm" onclick="exportLunes()">⬇ Descargar Excel</button>
+      <button class="btn ghost sm" onclick="verLunes()">Ver en pantalla</button>
+    </div></div>`;
+  if(pend&&!LUNES_AVISADO){LUNES_AVISADO=true;toast('📅 Listado semanal de '+LUNES_VEND+' pendiente de descargar','bad');try{document.title='🔴 Semanal pendiente · Seguimiento Cobranzas'}catch(e){}}
+  if(!pend){try{if(document.title.startsWith('🔴'))document.title='Seguimiento Cobranzas'}catch(e){}}
+}
+function verLunes(){try{$('cockVend').value=LUNES_VEND;}catch(e){}setCock('');const el=$('cockList');if(el)el.scrollIntoView({behavior:'smooth'})}
+async function exportLunes(){
+  try{
+    const d=lunesData();
+    if(!d.rows.length){toast('No hay comprobantes vencidos ni por vencer de '+LUNES_VEND,'ok');return}
+    toast('Generando listado semanal…');
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js');
+    const VERDE='FF1B7A44', GRIS='FF5C6677', ROJO='FFD83A3A', NAR='FFC97F00', BORDE='FFD9DEE7', ZEBRA='FFF7F9FB';
+    const wb=new ExcelJS.Workbook();wb.creator='Winflex S.A.';wb.created=new Date();
+    const money='"$"#,##0';const thin={style:'thin',color:{argb:BORDE}};const box={top:thin,left:thin,bottom:thin,right:thin};
+    const hdrFill={type:'pattern',pattern:'solid',fgColor:{argb:VERDE}};const hdrFont={bold:true,color:{argb:'FFFFFFFF'},size:11,name:'Calibri'};
+    const ref=lunesRef();
+    function hoja(nombre,cols,frozen){const ws=wb.addWorksheet(nombre,{views:[{state:'frozen',ySplit:frozen||1,showGridLines:false}]});ws.columns=cols.map(c=>({width:c.w}));cols.forEach((c,i)=>{const cell=ws.getCell(frozen||1,i+1);cell.value=c.h;cell.fill=hdrFill;cell.font=hdrFont;cell.border=box;cell.alignment={horizontal:c.r?'right':'left',vertical:'middle',wrapText:true}});ws.getRow(frozen||1).height=22;ws.autoFilter={from:{row:frozen||1,column:1},to:{row:frozen||1,column:cols.length}};return ws}
+    function fila(ws,ri,cols,vals,opts){opts=opts||{};vals.forEach((v,i)=>{const cell=ws.getCell(ri,i+1);cell.value=v;cell.border=box;cell.font={size:10};cell.alignment={vertical:'top',wrapText:!!cols[i].wrap,horizontal:cols[i].r?'right':'left'};if(cols[i].m){cell.numFmt=money}if(opts.rojo&&opts.rojo.includes(i))cell.font={size:10,bold:true,color:{argb:ROJO}};if(opts.nar&&opts.nar.includes(i))cell.font={size:10,bold:true,color:{argb:NAR}};if(opts.bold&&opts.bold.includes(i))cell.font={size:10,bold:true};if(ri%2===0)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:ZEBRA}}})}
+    const diasTxt=dd=>dd<0?(-dd)+'d vencida':(dd===0?'vence hoy':'vence en '+dd+'d');
+    const situTxt=c=>{const s=cliSituacion(c);return s?SITU[s].l:''};
+    const ctPrin=c=>(c.contactos&&c.contactos[0])||{};
+
+    /* ===== RESUMEN ===== */
+    const ws=wb.addWorksheet('Resumen',{views:[{showGridLines:false}]});
+    ws.columns=[{width:3},{width:34},{width:16},{width:16},{width:16},{width:14},{width:4}];
+    try{const logoId=wb.addImage({base64:'data:image/png;base64,'+LOGO_B64,extension:'png'});ws.addImage(logoId,{tl:{col:1,row:0},ext:{width:176,height:100}})}catch(e){}
+    ws.mergeCells('D2:F2');const t1=ws.getCell('D2');t1.value='SEGUIMIENTO SEMANAL · '+LUNES_VEND.toUpperCase();t1.font={bold:true,size:18,color:{argb:VERDE}};t1.alignment={horizontal:'right',vertical:'middle'};
+    ws.mergeCells('D3:F3');const t2=ws.getCell('D3');t2.value='Vencido + a vencer en los próximos '+LUNES_DIAS+' días';t2.font={size:11,color:{argb:GRIS}};t2.alignment={horizontal:'right'};
+    ws.mergeCells('D4:F4');const t3=ws.getCell('D4');t3.value='Semana del '+dShow(ref)+' · generado el '+dShow(todayISO())+(CURRENT_USER?' · '+CURRENT_USER:'');t3.font={size:10,italic:true,color:{argb:GRIS}};t3.alignment={horizontal:'right'};
+    let r=7;
+    function sec(text){ws.mergeCells(`B${r}:F${r}`);const c=ws.getCell(`B${r}`);c.value=text;c.font={bold:true,size:12,color:{argb:VERDE}};c.border={bottom:{style:'medium',color:{argb:VERDE}}};r+=2}
+    function kv(k,v,fmtM_,color){const lc=ws.getCell(`B${r}`);lc.value=k;lc.font={color:{argb:GRIS},size:11};const vc=ws.getCell(`C${r}`);vc.value=v;if(fmtM_)vc.numFmt=money;vc.font={bold:true,size:11,color:{argb:color||'FF1B2233'}};vc.alignment={horizontal:'right'};r++}
+    sec('Situación de la cartera de '+LUNES_VEND);
+    kv('Vencido',d.venc,true,ROJO);kv('A vencer en ≤'+LUNES_DIAS+' días',d.porV,true,NAR);kv('Total a gestionar',d.tot,true);
+    kv('Clientes',d.grupos.length);kv('Comprobantes',d.rows.length);
+    const credTot=d.grupos.reduce((a,g)=>a+g.credito,0);if(credTot>0.5)kv('Créditos NC a favor (sin aplicar)',credTot,true,'FF2B8FD6');
+    r++;
+    sec('Antigüedad');
+    const ag={a:0,b:0,c:0,d:0,h:0,s:0,q:0};
+    d.rows.forEach(x=>{if(x.dd<0){const v=-x.dd;if(v<=30)ag.a+=x.s;else if(v<=60)ag.b+=x.s;else if(v<=90)ag.c+=x.s;else ag.d+=x.s}else if(x.dd===0)ag.h+=x.s;else if(x.dd<=7)ag.s+=x.s;else ag.q+=x.s});
+    [['Vencido +90 días',ag.d,ROJO],['Vencido 61-90 días',ag.c,ROJO],['Vencido 31-60 días',ag.b,ROJO],['Vencido 1-30 días',ag.a,ROJO],['Vence hoy',ag.h,NAR],['Vence en 1-7 días',ag.s,NAR],['Vence en 8-'+LUNES_DIAS+' días',ag.q,NAR]].forEach(k=>kv(k[0],k[1],true,k[2]));
+    r++;
+    sec('Ranking por cliente');
+    ['Cliente','Vencido','A vencer','Total','Mayor atraso'].forEach((h,i)=>{const c=ws.getCell(r,i+2);c.value=h;c.fill=hdrFill;c.font=hdrFont;c.border=box;c.alignment={horizontal:i?'right':'left'}});r++;
+    d.grupos.forEach(g=>{const vals=[g.c.razonSocial+(situTxt(g.c)?' ('+situTxt(g.c)+')':''),g.venc,g.porV,g.tot,g.maxAtraso?g.maxAtraso+'d':'—'];vals.forEach((v,i)=>{const c=ws.getCell(r,i+2);c.value=v;c.border=box;c.font={size:10,bold:i===3,color:{argb:(i===1&&g.venc>0.5)?ROJO:'FF1B2233'}};c.alignment={horizontal:i?'right':'left'};if(i>=1&&i<=3)c.numFmt=money});r++});
+    const tr=r;ws.getCell(tr,2).value='TOTAL';ws.getCell(tr,2).font={bold:true};[[3,d.venc],[4,d.porV],[5,d.tot]].forEach(([col,val])=>{const c=ws.getCell(tr,col);c.value=val;c.numFmt=money;c.font={bold:true,color:{argb:VERDE}};c.alignment={horizontal:'right'};c.border={top:{style:'double',color:{argb:VERDE}}}});
+
+    /* ===== POR CLIENTE ===== */
+    const cc=[{h:'Cliente',w:32},{h:'CUIT',w:14},{h:'Código',w:9},{h:'Situación',w:11},{h:'Condición',w:10},{h:'Contacto',w:18},{h:'Teléfono',w:16},{h:'Email',w:26},
+      {h:'Vencido',w:14,r:1,m:1},{h:'A vencer ≤'+LUNES_DIAS+'d',w:14,r:1,m:1},{h:'Total',w:14,r:1,m:1},{h:'Crédito NC',w:12,r:1,m:1},{h:'Neto',w:14,r:1,m:1},
+      {h:'Comprob.',w:9,r:1},{h:'Mayor atraso',w:11,r:1},{h:'Próx. vto',w:11},{h:'Cheque a',w:9,r:1},{h:'Último seguimiento',w:48,wrap:1},{h:'Obs. cliente',w:32,wrap:1}];
+    const wc=hoja('Por cliente',cc);let ri=2;
+    d.grupos.forEach(g=>{const c=g.c,ct=ctPrin(c),sg=ultimoSeg(c);
+      const vals=[c.razonSocial,c.cuit||'',c.codigo||'',situTxt(c),condLabel(c.condicionDias),ct.nombre||'',ct.telefono||'',ct.email||'',g.venc,g.porV,g.tot,g.credito,g.tot-g.credito,g.items.length,g.maxAtraso?g.maxAtraso+'d':'—',g.proxVto?dShow(g.proxVto):'—',(c.diasCheque!=null&&c.diasCheque!=='')?c.diasCheque+'d':'',sg?(dShow(sg.f)+(sg.user?' ('+sg.user+')':'')+': '+sg.texto):'',c.obs||''];
+      fila(wc,ri,cc,vals,{rojo:g.venc>0.5?[8]:[],bold:[0,12],nar:g.porV>0.5?[9]:[]});ri++});
+    const tc=ri;wc.getCell(tc,8).value='TOTAL';wc.getCell(tc,8).font={bold:true};wc.getCell(tc,8).alignment={horizontal:'right'};
+    [[9,d.venc],[10,d.porV],[11,d.tot],[12,credTot],[13,d.tot-credTot]].forEach(([col,val])=>{const c=wc.getCell(tc,col);c.value=val;c.numFmt=money;c.font={bold:true,color:{argb:VERDE}};c.alignment={horizontal:'right'};c.border={top:{style:'double',color:{argb:VERDE}}}});
+
+    /* ===== DETALLE ===== */
+    const dc=[{h:'Cliente',w:32},{h:'Situación',w:11},{h:'Tipo',w:9},{h:'Número',w:16},{h:'Emisión',w:11},{h:'F. remito',w:11},{h:'Vencimiento',w:12},{h:'Días',w:14},{h:'Estado',w:13},
+      {h:'Importe',w:14,r:1,m:1},{h:'Cobrado',w:14,r:1,m:1},{h:'NC aplicada',w:12,r:1,m:1},{h:'Saldo',w:14,r:1,m:1},{h:'Cond. aplicada',w:12},{h:'Cheque est.',w:11},{h:'Pagos parciales',w:40,wrap:1},{h:'Observación',w:36,wrap:1}];
+    const wd=hoja('Detalle',dc);ri=2;
+    d.grupos.forEach(g=>g.items.forEach(x=>{const f=x.f,c=g.c;const ce=condicionEfectiva(f);const m=EM[x.est]||EM.pendiente;const fch=fechaChequeDe(f);
+      const vals=[c.razonSocial,situTxt(c),tipoLabel(f.tipo),(f.ptoVenta?f.ptoVenta+'-':'')+(f.numero||''),f.fecha?dShow(f.fecha):'',f.fechaRemito?dShow(f.fechaRemito):'',dShow(vencimientoDe(f)),diasTxt(x.dd),m.l,+f.importe||0,(+f.importe||0)-x.s-ncAplicadaA(f),ncAplicadaA(f),x.s,ce.dias+'d '+(ce.modo==='remito'?'desde remito':'desde factura')+(f.vencManual?' (vto manual)':''),fch?dShow(fch):'',pagosTxt(f),f.obs||''];
+      fila(wd,ri,dc,vals,{rojo:x.dd<0?[7]:[],nar:x.dd>=0?[7]:[],bold:[12]});ri++}));
+    const td=ri;wd.getCell(td,9).value='TOTAL';wd.getCell(td,9).font={bold:true};wd.getCell(td,9).alignment={horizontal:'right'};
+    const totImp=d.rows.reduce((a,x)=>a+(+x.f.importe||0),0);
+    [[10,totImp],[13,d.tot]].forEach(([col,val])=>{const c=wd.getCell(td,col);c.value=val;c.numFmt=money;c.font={bold:true,color:{argb:VERDE}};c.alignment={horizontal:'right'};c.border={top:{style:'double',color:{argb:VERDE}}}});
+
+    /* ===== CONTACTOS ===== */
+    const kc=[{h:'Cliente',w:32},{h:'Nombre',w:22},{h:'Teléfono',w:18},{h:'WhatsApp',w:30},{h:'Email',w:30},{h:'Total a gestionar',w:16,r:1,m:1}];
+    const wk=hoja('Contactos',kc);ri=2;
+    d.grupos.forEach(g=>{const cs=(g.c.contactos&&g.c.contactos.length)?g.c.contactos:[{}];cs.forEach(ct=>{const wa=waLink(ct.telefono);fila(wk,ri,kc,[g.c.razonSocial,ct.nombre||'',ct.telefono||'',wa,ct.email||'',g.tot],{bold:[0]});if(wa){const c=wk.getCell(ri,4);c.value={text:wa,hyperlink:wa};c.font={size:10,color:{argb:'FF2B8FD6'},underline:true}}ri++})});
+
+    /* ===== SEGUIMIENTO ===== */
+    const obsRows=[];d.grupos.forEach(g=>{const h=(g.c.seguimiento&&g.c.seguimiento.historial)||[];h.forEach(x=>obsRows.push({cli:g.c.razonSocial,f:x.f,user:x.user||'',texto:x.texto}))});
+    const oc=[{h:'Cliente',w:32},{h:'Fecha',w:12},{h:'Usuario',w:14},{h:'Observación',w:70,wrap:1}];
+    const wo=hoja('Seguimiento',oc);ri=2;
+    if(obsRows.length){obsRows.sort((a,b)=>(b.f||'').localeCompare(a.f||''));obsRows.forEach(o=>{fila(wo,ri,oc,[o.cli,dShow(o.f),o.user,o.texto]);ri++})}
+    else{wo.getCell(2,1).value='Sin seguimiento cargado para estos clientes';wo.getCell(2,1).font={italic:true,color:{argb:GRIS}}}
+
+    const buf=await wb.xlsx.writeBuffer();
+    const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Semanal-'+LUNES_VEND+'-'+ref+'.xlsx';a.click();
+    localStorage.setItem(LUNES_LS,ref);renderLunesBox();
+    toast('Listado semanal de '+LUNES_VEND+' descargado','ok');
+  }catch(e){toast('Error al generar el listado: '+e.message,'bad');}
 }
 
 /* ======================= EFECTIVO · remitos internos ======================= */
