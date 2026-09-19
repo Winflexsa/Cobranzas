@@ -27,7 +27,8 @@
   var tactil=(navigator.maxTouchPoints>0)||(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
   var esTel=!!tactil&&lado<600;
   window.WF_ES_TEL=esTel;
-  if(pref==='celu'||(esTel&&pref!=='full'))document.documentElement.classList.add('celu');
+  if(pref==='celu'||(esTel&&pref!=='full')){document.documentElement.classList.add('celu');
+    var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content','#1b2233');}
 }catch(e){}})();
 </script>
 <style>
@@ -285,111 +286,185 @@ body.modo-modulo nav{display:none}
   .efe-filtro strong{color:var(--text)}
   @media(max-width:760px){.efe-split{grid-template-columns:1fr}.kpis.k5{grid-template-columns:1fr 1fr}}
 
-  /* ================= MODO CELULAR (todo bajo html.celu: no afecta tablet ni PC) ================= */
-  html.celu body{font-size:13.5px}
+  /* ================= MODO CELULAR v2 (todo bajo html.celu: no afecta tablet ni PC) ================= */
+  html.celu body{font-size:15px;background:var(--bg)}
   html.celu input,html.celu select,html.celu textarea{font-size:16px}
   html.celu .login-card{width:auto;max-width:340px;margin:0 16px;padding:30px 22px}
-  html.celu #app{padding:0 10px calc(86px + env(safe-area-inset-bottom,0px))}
-  html.celu header{gap:9px;padding:10px 2px}
-  html.celu header .sub{display:none}
-  html.celu header h1{font-size:14px}
+  html.celu #app{padding:0 14px calc(160px + env(safe-area-inset-bottom,0px))}
+  html.celu .tab.active{animation:none}
+  /* barra superior tipo app */
+  html.celu #app>header{margin:0 -14px 16px;padding:12px 14px;background:#1b2233;color:#fff;gap:10px;box-shadow:0 2px 10px rgba(20,30,50,.18)}
+  html.celu #app>header h1{font-size:17px;font-weight:700;color:#fff}
+  html.celu #app>header .sub,html.celu .who{display:none}
   html.celu .hlogo-img{height:26px}
-  html.celu header .right{gap:6px}
-  html.celu .who{display:none}
-  html.celu .cloud{padding:4px 8px;font-size:10.5px;max-width:110px;overflow:hidden;white-space:nowrap}
-  html.celu .icon-btn{padding:8px 10px}
+  html.celu #app>header .cloud{border-color:rgba(255,255,255,.22);color:#d5dbe7;padding:5px 9px;font-size:11px;max-width:120px;overflow:hidden;white-space:nowrap}
+  html.celu #app>header .icon-btn{border-color:rgba(255,255,255,.22);color:#fff;padding:7px 11px;font-size:15px}
+  html.celu #app>header .icon-btn[onclick="logout()"]{display:none}
   /* barra de modulos abajo */
-  html.celu nav,html.celu body.modo-modulo nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:40;margin:0;border-radius:0;border-width:1px 0 0;gap:2px;
-    padding:4px 4px calc(4px + env(safe-area-inset-bottom,0px));overflow-x:auto;box-shadow:0 -4px 16px rgba(20,30,50,.08)}
-  html.celu nav button{flex:1 0 auto;min-width:62px;font-size:10.5px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;white-space:nowrap}
-  html.celu nav button::before{font-size:18px;line-height:1.1}
+  html.celu nav,html.celu body.modo-modulo nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:40;margin:0;border-radius:0;border-width:1px 0 0;gap:0;
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));box-shadow:0 -4px 16px rgba(20,30,50,.08)}
+  html.celu nav button{flex:1 1 0;min-width:0;font-size:10.5px;font-weight:600;padding:5px 2px;display:flex;flex-direction:column;align-items:center;gap:3px;white-space:nowrap;border-radius:10px}
+  html.celu nav button.active{background:none;box-shadow:none;color:var(--accent-d)}
+  html.celu nav button::before{font-size:21px;line-height:1.1;filter:grayscale(1);opacity:.6}
+  html.celu nav button.active::before{filter:none;opacity:1}
   html.celu nav button[data-tab=resumen]::before{content:'\1F4CA'}
   html.celu nav button[data-tab=facturas]::before{content:'\1F4C4'}
   html.celu nav button[data-tab=clientes]::before{content:'\1F465'}
   html.celu nav button[data-tab=efectivo]::before{content:'\1F4B5'}
   html.celu nav button[data-tab=total]::before{content:'\1F9FE'}
-  html.celu nav button[data-tab=importar]::before{content:'\2B06'}
-  html.celu nav button[data-tab=config]::before{content:'\2699'}
-  html.celu .toast{bottom:calc(92px + env(safe-area-inset-bottom,0px));max-width:92vw;text-align:center}
-  /* kpis y tarjetas */
-  html.celu .kpis,html.celu .kpis.k5{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
-  html.celu .kpi{padding:11px 12px}
-  html.celu .kpi .lab{font-size:10px}
-  html.celu .kpi .val{font-size:17px;margin-top:4px}
-  html.celu .kpi .meta{font-size:10.5px}
-  html.celu .card{padding:14px}
-  html.celu .grid2,html.celu .efe-split{grid-template-columns:1fr;gap:12px}
-  html.celu .fuera-grid{grid-template-columns:1fr 1fr 1fr;gap:6px}
-  html.celu .fuera-cell{padding:9px 10px}
-  html.celu .fuera-cell .fv{font-size:14px}
-  html.celu .fuera-cell .fl{font-size:10.5px}
-  html.celu .chips{flex-wrap:nowrap;overflow-x:auto;margin:0 -10px 12px;padding:0 10px 4px;-webkit-overflow-scrolling:touch}
-  html.celu .chip{flex:none;padding:8px 12px;font-size:12.5px}
-  /* barras de herramientas */
-  html.celu .toolbar{gap:8px;margin-bottom:12px}
-  html.celu .toolbar .search{flex:1 0 100%;min-width:0}
-  html.celu .toolbar select.filter{flex:1 1 46%;min-width:0;padding:10px}
-  html.celu .toolbar .btn{flex:1 1 auto;text-align:center;justify-content:center;padding:11px 12px}
-  html.celu .toolbar label.efe-chip{flex:1 0 100%}
-  /* cockpit */
-  html.celu .clihead{flex-wrap:wrap;gap:8px;padding:12px}
-  html.celu .clihead .nm{font-size:14px}
-  html.celu .clihead .tot .s{font-size:15px}
-  html.celu .clibody{padding:2px 12px 10px}
-  html.celu .fl-side{width:100%;justify-content:space-between}
-  html.celu .cliacts{padding:10px 12px}
-  html.celu .cliacts>*{flex:1 1 auto;text-align:center;justify-content:center}
-  html.celu .mini{padding:9px 12px;font-size:13px}
+  html.celu nav button[data-tab=mas]::before{content:'\2630'}
+  html.celu nav button[data-tab=importar],html.celu nav button[data-tab=config]{display:none}
+  html.celu .toast{bottom:calc(96px + env(safe-area-inset-bottom,0px));max-width:92vw;text-align:center}
+  /* menu Mas */
+  .mas-ov{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:70;display:none;align-items:flex-end}
+  .mas-ov.open{display:flex}
+  .mas-sheet{width:100%;background:var(--surface);border-radius:20px 20px 0 0;padding:10px 14px calc(18px + env(safe-area-inset-bottom,0px));animation:masup .18s}
+  @keyframes masup{from{transform:translateY(30px);opacity:0}}
+  .mas-sheet .grip{width:40px;height:4px;border-radius:2px;background:var(--border2);margin:2px auto 10px}
+  .mas-sheet .quien{font-size:12.5px;color:var(--faint);padding:2px 6px 8px}
+  .mas-sheet button{display:flex;align-items:center;gap:14px;width:100%;padding:16px 8px;font-size:16px;font-weight:600;border-bottom:1px solid var(--border);text-align:left}
+  .mas-sheet button:last-child{border-bottom:none;color:var(--venc)}
+  .mas-sheet button span{font-size:20px;width:26px;text-align:center}
+  /* KPIs: uno grande + el resto chicos */
+  html.celu .kpis,html.celu .kpis.k5{grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px}
+  html.celu .kpis .kpi{grid-column:span 2;padding:12px 12px 12px 14px;min-width:0}
+  html.celu .kpis.k5 .kpi{grid-column:span 3}
+  html.celu .kpis .kpi .lab{font-size:10px;letter-spacing:.3px}
+  html.celu .kpis .kpi .val{font-size:18px;margin-top:4px}
+  html.celu .kpis .kpi .meta{font-size:10.5px;line-height:1.3}
+  html.celu .kpis .kpi:first-child{grid-column:1/-1;background:linear-gradient(135deg,#26324f,#1b2233);border:none;padding:20px 20px 18px;box-shadow:0 8px 22px rgba(27,34,51,.22)}
+  html.celu .kpis .kpi:first-child .bar{display:none}
+  html.celu .kpis .kpi:first-child .lab{color:rgba(255,255,255,.7);font-size:12px}
+  html.celu .kpis .kpi:first-child .val{color:#fff!important;font-size:36px;margin-top:6px;letter-spacing:-.5px}
+  html.celu .kpis .kpi:first-child .meta{color:rgba(255,255,255,.6);font-size:12.5px;margin-top:4px}
+  html.celu .card{padding:16px;margin-bottom:14px}
+  html.celu .grid2,html.celu .efe-split{grid-template-columns:1fr;gap:0}
+  html.celu .efe-split{gap:16px}
+  html.celu .fuera-grid{grid-template-columns:1fr 1fr 1fr;gap:8px}
+  html.celu .fuera-cell{padding:10px}
+  html.celu .fuera-cell .fv{font-size:15px}
+  html.celu .fuera-cell .fl{font-size:11px}
+  html.celu .fuera-note{font-size:12px}
+  html.celu .chips{flex-wrap:nowrap;overflow-x:auto;margin:0 -14px 14px;padding:0 14px 4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  html.celu .chips::-webkit-scrollbar{display:none}
+  html.celu .chip{flex:none;padding:10px 15px;font-size:14px;border-radius:22px}
   html.celu .lunes-box .la{width:100%}
   html.celu .lunes-box .la>*{flex:1}
-  /* tablas principales -> tarjetas */
+  html.celu .hint{font-size:12.5px}
+  /* buscador + filtros plegables + boton flotante */
+  html.celu .toolbar{gap:10px;margin-bottom:14px!important}
+  html.celu .toolbar .search{flex:1 1 0;min-width:0}
+  html.celu .toolbar .search input{padding:13px 13px 13px 38px;border-radius:14px}
+  .tb-toggle{display:none}
+  html.celu .tb-toggle{display:inline-flex;align-items:center;gap:6px;flex:none;padding:0 15px;height:48px;border-radius:14px;background:var(--surface);border:1px solid var(--border);font-weight:700;font-size:14px;color:var(--text);position:relative}
+  html.celu .tb-toggle.on::after{content:'';position:absolute;top:9px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--accent)}
+  html.celu .toolbar:not(.tb-open)>*:not(.search):not(.tb-toggle):not(.fab){display:none!important}
+  html.celu .toolbar.tb-open>select.filter{flex:1 0 100%;padding:13px;border-radius:12px}
+  html.celu .toolbar.tb-open>.btn:not(.fab),html.celu .toolbar.tb-open>label.btn{flex:1 1 46%;justify-content:center;text-align:center;padding:13px 10px;font-size:14px}
+  html.celu .toolbar.tb-open>label.efe-chip{flex:1 0 100%;font-size:14px;padding:4px 2px}
+  html.celu .fab{position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:35;padding:15px 22px!important;border-radius:30px!important;font-size:15.5px!important;box-shadow:0 8px 22px rgba(21,164,99,.45)}
+  /* cockpit: tarjetas plegadas, se abren al tocar */
+  html.celu .clicard{margin-bottom:12px;border-radius:16px;box-shadow:0 2px 8px rgba(20,30,50,.05)}
+  html.celu .clihead{padding:16px 14px 16px 16px;gap:10px;align-items:flex-start}
+  html.celu .clihead>div:first-child{flex:1;min-width:0}
+  html.celu .clihead .nm{font-size:16px;line-height:1.25}
+  html.celu .clihead .vd{font-size:12.5px;margin-top:4px;line-height:1.7}
+  html.celu .clihead .cond-pill{margin-left:0}
+  html.celu .clihead .tot{margin-left:0;flex:none}
+  html.celu .clihead .tot .s{font-size:17px}
+  html.celu .clihead .tot .c{margin-top:5px}
+  html.celu .clihead::after{content:'\203A';font-size:24px;line-height:1;color:var(--faint);align-self:center;transition:transform .15s}
+  html.celu .clicard.open .clihead::after{transform:rotate(90deg)}
+  html.celu .clicard:not(.open) .clibody,html.celu .clicard:not(.open) .segline,html.celu .clicard:not(.open) .cliacts{display:none!important}
+  html.celu .clicard.open .clibody{display:block!important;padding:2px 16px 8px}
+  html.celu .fline{padding:14px 0}
+  html.celu .fl-nro{font-size:15px}
+  html.celu .fl-side{width:100%;justify-content:space-between}
+  html.celu .fline .am{font-size:16px}
+  html.celu .mini{padding:10px 14px;font-size:14px;border-radius:10px}
+  html.celu .segline{font-size:13.5px;padding:12px 16px}
+  html.celu .cliacts{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 14px}
+  html.celu .cliacts>*{justify-content:center;text-align:center;padding:12px 8px!important;font-size:13.5px!important;white-space:normal}
+  html.celu .cliacts .situ-sel{font-size:14px!important}
+  /* listas: cada fila es una tarjeta */
+  html.celu .tablewrap.tcw{background:none;border:none;overflow:visible}
   html.celu table.tcards,html.celu table.tcards tbody{display:block}
   html.celu table.tcards thead{display:none}
-  html.celu table.tcards tr{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;padding:12px 13px;border-bottom:1px solid var(--border)}
-  html.celu table.tcards tr:last-child{border-bottom:none}
-  html.celu table.tcards td,html.celu table.tcards td.hide{display:block;padding:0;border:none;text-align:left;font-size:13.5px;min-width:0}
-  html.celu table.tcards td:first-child,html.celu table.tcards td.empty{grid-column:1/-1}
-  html.celu table.tcards td.empty{padding:30px 10px;text-align:center}
-  html.celu table.tcards td::before{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--faint);font-weight:700;margin-bottom:1px}
-  html.celu table.tcards .cli-name{font-size:14.5px}
-  html.celu table.tcards .row-acts{justify-content:flex-start;flex-wrap:wrap}
-  html.celu #facBody td:nth-child(2)::before{content:'Comprobante'}
-  html.celu #facBody td:nth-child(3)::before{content:'Fecha'}
+  html.celu table.tcards tr{display:grid;grid-template-columns:repeat(6,1fr);gap:8px 10px;padding:16px;margin-bottom:10px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 2px 8px rgba(20,30,50,.05)}
+  html.celu table.tcards tr:active{background:var(--surface2)}
+  html.celu table.tcards td,html.celu table.tcards td.hide{display:block;padding:0;border:none;text-align:left;font-size:14.5px;min-width:0;grid-column:span 2}
+  html.celu table.tcards td.empty{grid-column:1/-1;padding:30px 10px;text-align:center}
+  html.celu table.tcards td::before{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--faint);font-weight:700;margin-bottom:2px}
+  html.celu table.tcards td:first-child{grid-row:1;grid-column:1/5}
+  html.celu table.tcards .cli-name{font-size:16px;line-height:1.25}
+  html.celu table.tcards .cli-meta{font-size:12.5px;margin-top:3px}
+  html.celu table.tcards .tag-efe{margin:4px 6px 0 0;display:inline-block}
+  html.celu table.tcards .cli-name+.tag-efe{margin-left:6px}
+  /* facturas */
+  html.celu #facBody td:nth-child(6){grid-row:1;grid-column:5/7;text-align:right;font-size:16.5px}
+  html.celu #facBody td:nth-child(2){grid-row:2;grid-column:1/5;color:var(--muted);font-weight:600}
+  html.celu #facBody td:nth-child(2) .cli-meta{display:inline;margin-left:6px;font-weight:400}
+  html.celu #facBody td:nth-child(7){grid-row:2;grid-column:5/7;text-align:right}
+  html.celu #facBody td:nth-child(7) .badge{margin:0 0 3px 3px}
+  html.celu #facBody td:nth-child(4){grid-row:3;grid-column:1/3;padding-top:8px;border-top:1px solid var(--border)}
+  html.celu #facBody td:nth-child(3){grid-row:3;grid-column:3/5;padding-top:8px;border-top:1px solid var(--border)}
+  html.celu #facBody td:nth-child(5){grid-row:3;grid-column:5/7;padding-top:8px;border-top:1px solid var(--border);text-align:right}
   html.celu #facBody td:nth-child(4)::before{content:'Vence'}
+  html.celu #facBody td:nth-child(3)::before{content:'Emisi\F3n'}
   html.celu #facBody td:nth-child(5)::before{content:'Importe'}
-  html.celu #facBody td:nth-child(6)::before{content:'Saldo'}
-  html.celu #facBody td:nth-child(7),html.celu #facBody td:nth-child(8){grid-column:1/-1}
-  html.celu #cliBody td:nth-child(2)::before{content:'Vendedor'}
-  html.celu #cliBody td:nth-child(3)::before{content:'Condici\F3n'}
-  html.celu #cliBody td:nth-child(4)::before{content:'Contacto'}
-  html.celu #cliBody td:nth-child(4){grid-column:1/-1}
-  html.celu #cliBody td:nth-child(5)::before{content:'Saldo'}
-  html.celu #cliBody td:nth-child(6){align-self:end}
-  html.celu #efeBody td:nth-child(2)::before{content:'Pendiente'}
+  html.celu #facBody td:nth-child(8){grid-row:4;grid-column:1/-1;display:none}
+  html.celu #facBody tr.open td:nth-child(8){display:block;padding-top:6px}
+  html.celu #facBody .row-acts{justify-content:stretch;gap:8px}
+  html.celu #facBody .row-acts .mini{flex:1;padding:12px 6px}
+  html.celu #facBody .row-acts .mini.go{flex:2;background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700}
+  /* clientes */
+  html.celu #cliBody td:nth-child(5){grid-row:1;grid-column:5/7;text-align:right;font-size:16.5px}
+  html.celu #cliBody td:nth-child(2){grid-row:2;grid-column:1/3}
+  html.celu #cliBody td:nth-child(3){grid-row:2;grid-column:3/7;text-align:right;color:var(--muted)}
+  html.celu #cliBody td:nth-child(4){grid-row:3;grid-column:1/-1;padding-top:8px;border-top:1px solid var(--border);font-size:14px}
+  html.celu #cliBody td:nth-child(4) a{display:inline-block;margin-left:6px;padding:3px 12px;border-radius:14px;background:#1f7a44;color:#fff;font-weight:700;font-size:12.5px}
+  html.celu #cliBody td:nth-child(6){display:none}
+  /* efectivo */
+  html.celu #tab-efectivo.active{display:flex;flex-direction:column}
+  html.celu #tab-efectivo>.card{order:9}
+  html.celu #tab-efectivo>.hint{order:8;margin-bottom:16px}
+  html.celu #efeBody td:nth-child(2){grid-row:1;grid-column:5/7;text-align:right;font-size:16.5px}
+  html.celu #efeBody td:nth-child(6){grid-row:2;grid-column:1/-1}
+  html.celu #efeBody .efe-mini{height:10px;border-radius:5px}
+  html.celu #efeBody td:nth-child(4){grid-row:3;grid-column:1/3}
+  html.celu #efeBody td:nth-child(5){grid-row:3;grid-column:3/5}
+  html.celu #efeBody td:nth-child(3){grid-row:3;grid-column:5/7;text-align:right}
+  html.celu #efeBody td:nth-child(4)::before{content:'Deuda m\E1s vieja'}
+  html.celu #efeBody td:nth-child(5)::before{content:'\DAlt. pago hace'}
   html.celu #efeBody td:nth-child(3)::before{content:'% del total'}
-  html.celu #efeBody td:nth-child(4)::before{content:'D\EDas m\E1x.'}
-  html.celu #efeBody td:nth-child(5)::before{content:'\DAlt. pago'}
-  html.celu #efeBody td:nth-child(6){grid-column:1/-1}
+  /* cuenta total */
+  html.celu #totBody td:nth-child(5){grid-row:1;grid-column:5/7;text-align:right;font-size:17px}
+  html.celu #totBody td:nth-child(2),html.celu #totBody td:nth-child(3),html.celu #totBody td:nth-child(4){grid-row:2;padding-top:8px;border-top:1px solid var(--border)}
+  html.celu #totBody td:nth-child(2){grid-column:1/3}
+  html.celu #totBody td:nth-child(3){grid-column:3/5}
+  html.celu #totBody td:nth-child(4){grid-column:5/7;text-align:right}
   html.celu #totBody td:nth-child(2)::before{content:'Oficial'}
   html.celu #totBody td:nth-child(3)::before{content:'Vencido'}
   html.celu #totBody td:nth-child(4)::before{content:'Efectivo'}
-  html.celu #totBody td:nth-child(5)::before{content:'Total'}
-  html.celu #totBody td:nth-child(5){font-size:15px}
-  /* tablas dentro de modales: compactas con scroll lateral */
-  html.celu .modal th,html.celu .modal td{padding:9px 8px;font-size:12.5px}
   /* modales a pantalla completa */
   html.celu .overlay{padding:0;align-items:stretch;backdrop-filter:none}
   html.celu .modal{max-width:none!important;border:none;border-radius:0;height:100vh;height:100dvh;display:flex;flex-direction:column}
-  html.celu .modal header{padding:13px 16px;flex:none}
-  html.celu .modal header .x{font-size:28px;padding:0 10px}
-  html.celu .modal .body{flex:1;max-height:none;overflow:auto;padding:16px;-webkit-overflow-scrolling:touch}
-  html.celu .modal .foot{flex:none;flex-wrap:wrap;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
-  html.celu .modal .foot .btn{flex:1 1 auto;padding:13px 12px}
+  html.celu .modal header{padding:14px 16px;flex:none;background:#1b2233;color:#fff}
+  html.celu .modal header h2{font-size:17px}
+  html.celu .modal header .x{font-size:30px;padding:0 10px;color:#fff}
+  html.celu .modal .body{flex:1;max-height:none;overflow:auto;padding:18px 16px;-webkit-overflow-scrolling:touch}
+  html.celu .modal .foot{flex:none;flex-wrap:wrap;padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));box-shadow:0 -4px 14px rgba(20,30,50,.06)}
+  html.celu .modal .foot .btn{flex:1 1 auto;padding:15px 12px;font-size:15px;border-radius:13px}
+  html.celu .modal th,html.celu .modal td{padding:10px 8px;font-size:13px}
+  html.celu .field{margin-bottom:16px}
+  html.celu .field label{font-size:13px}
+  html.celu .field input,html.celu .field select,html.celu .field textarea{padding:14px 13px;border-radius:12px}
   html.celu .frow{flex-direction:column;gap:0}
   html.celu .frow .file-zone{margin-bottom:10px}
   html.celu .field[style*="max-width"]{max-width:none!important}
   html.celu .contact-row{flex-wrap:wrap}
-  html.celu .contact-row input,html.celu .contact-row select{flex:1 1 40%;min-width:0;font-size:16px}
+  html.celu .contact-row input,html.celu .contact-row select{flex:1 1 40%;min-width:0;font-size:16px;padding:12px 10px}
+  html.celu .seg button{padding:13px 10px;font-size:14px}
   .vista-sw{display:block;margin:26px auto 0;padding:10px 16px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:12.5px;font-weight:600}
 </style>
 </head>
@@ -466,7 +541,7 @@ body.modo-modulo nav{display:none}
       </select>
       <button class="btn" onclick="openFactura()">+ Factura</button>
     </div>
-    <div class="tablewrap"><table class="tcards">
+    <div class="tablewrap tcw"><table class="tcards">
       <thead><tr><th>Cliente</th><th>Comprob.</th><th class="hide">Fecha</th><th>Vence</th><th class="r">Importe</th><th class="r">Saldo</th><th>Estado</th><th></th></tr></thead>
       <tbody id="facBody"></tbody>
     </table></div>
@@ -480,7 +555,7 @@ body.modo-modulo nav{display:none}
       <select class="filter" id="cliVend" onchange="renderClientes()"></select>
       <button class="btn" onclick="openCliente()">+ Cliente</button>
     </div>
-    <div class="tablewrap"><table class="tcards">
+    <div class="tablewrap tcw"><table class="tcards">
       <thead><tr><th>Cliente</th><th class="hide">Vendedor</th><th class="hide">Condición</th><th>Contacto</th><th class="r">Saldo</th><th></th></tr></thead>
       <tbody id="cliBody"></tbody>
     </table></div>
@@ -528,7 +603,7 @@ body.modo-modulo nav{display:none}
     <div id="efeFiltroInfo"></div>
     <div id="efeOcultos"></div>
     <div id="efePreview"></div>
-    <div class="tablewrap"><table class="tcards">
+    <div class="tablewrap tcw"><table class="tcards">
       <thead><tr><th>Cliente</th><th class="r" id="efeThPend">Pendiente</th><th class="r">%</th><th class="r">D&iacute;as m&aacute;x.</th><th class="r">&Uacute;lt. pago</th><th>Antig&uuml;edad</th></tr></thead>
       <tbody id="efeBody"></tbody></table></div>
     <div class="hint">Tocá un cliente para ver sus remitos y pagos. El cheque a fecha se toma como cobrado desde que lo cargás y figura aparte en “Cheques a fecha”; si rebota, marcalo como rechazado y vuelve a ser deuda. Los filtros de vendedor y producto también salen aplicados en el informe.</div>
@@ -555,7 +630,7 @@ body.modo-modulo nav{display:none}
       <button class="btn sm" onclick="openCliente(null)">+ Cliente</button>
       <button class="btn ghost sm" onclick="crearClientesFaltantes()">+ Dar de alta los que faltan</button>
     </div>
-    <div class="tablewrap"><table class="tcards">
+    <div class="tablewrap tcw"><table class="tcards">
       <thead><tr><th>Cliente</th><th class="r">Oficial</th><th class="r">Vencido</th><th class="r">Efectivo</th><th class="r">Total</th></tr></thead>
       <tbody id="totBody"></tbody></table></div>
     <div class="hint">Tocá un cliente para ver la cuenta completa: los comprobantes de la cobranza oficial y los movimientos de efectivo, uno abajo del otro.</div>
@@ -1125,7 +1200,7 @@ function renderCockpit(){
     const sit=cliSituacion(cli);
     const sitBadge=sit?`<span class="badge ${sit==='juicio'?'b-jui':'b-mor'}" style="margin-left:6px">${SITU[sit].ico} ${SITU[sit].l}</span>`:'';
     const headBadge=fueraFilter?'':(useCheque?chequeBadge(worst):diasBadge(worst));
-    return `<div class="clicard ${cls}">
+    return `<div class="clicard ${cls}" data-cid="${cid}">
       <div class="clihead" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
         <div><div class="nm">${esc(cli.razonSocial)}${sitBadge}</div><div class="vd">${esc(cli.vendedor||'')}${ct.nombre?' · '+esc(ct.nombre):''}${arr.length>1?' · '+arr.length+' comprob.':''} <span class="cond-pill">⏱ ${condTxt}</span></div></div>
         <div class="tot"><div class="s">${fmt(tot)}</div><div class="c">${headBadge}</div></div>
@@ -1202,7 +1277,7 @@ function renderFacturas(){
     let salCell;
     if(nc){salCell=asoc?`<span style="color:var(--faint)">aplicada → ${esc((asoc.ptoVenta?asoc.ptoVenta+'-':'')+(asoc.numero||''))}</span>`:(f.asociadaNum?`<span class="badge b-venc" title="No encuentra la Fc ${esc(f.asociadaNum)} de este cliente">⚠ NC sin vincular</span>`:`<span style="color:var(--cobr);font-weight:700">−${fmt(Math.abs(saldo))} cred.</span>`)}
     else{salCell=(saldo>0.5?fmt(saldo):'—')+(ncAp>0?`<div class="cli-meta" style="color:var(--cobr)">NC −${fmt(ncAp)} aplicada</div>`:'')}
-    return `<tr>
+    return `<tr data-fid="${f.id}">
     <td><div class="cli-name">${esc(cli?cli.razonSocial:'⚠ sin cliente')}</div><div class="cli-meta">${esc(cli?cli.vendedor:'')}</div></td>
     <td>${tipoLabel(f.tipo)}<div class="cli-meta">${esc(nro)}</div></td>
     <td class="hide num">${dShow(f.fecha)}</td>
@@ -3251,12 +3326,49 @@ function comCSV(){
   a.download='comisiones-nitopi-'+(COM_MES||'todo')+'.csv';a.click();URL.revokeObjectURL(a.href);
 }
 
-/* --- cambio manual de vista: solo se muestra en telefonos --- */
+/* ================= MODO CELULAR: comportamiento (solo corre si html.celu) ================= */
 function wfVista(v){try{localStorage.setItem('wf_vista',v)}catch(e){}const u=new URL(location.href);u.searchParams.delete('vista');location.replace(u.toString())}
-(function(){const celu=document.documentElement.classList.contains('celu');if(!celu&&!window.WF_ES_TEL)return;
-  const b=document.createElement('button');b.className='vista-sw';
-  b.textContent=celu?'\uD83D\uDDA5 Ver versi\u00f3n completa':'\uD83D\uDCF1 Ver versi\u00f3n celular';
-  b.onclick=()=>wfVista(celu?'full':'celu');$('app').appendChild(b)})();
+(function(){
+  const CELU=document.documentElement.classList.contains('celu');
+  if(!CELU){ if(window.WF_ES_TEL){const b=document.createElement('button');b.className='vista-sw';b.textContent='\uD83D\uDCF1 Ver versi\u00f3n celular';b.onclick=()=>wfVista('celu');$('app').appendChild(b)} return; }
+  const NOMBRES={resumen:'Cobranza',facturas:'Facturas',clientes:'Clientes',efectivo:'Efectivo',total:'Cuenta total',importar:'Importar',config:'Configuraci\u00f3n'};
+  const nav=document.querySelector('nav'), h1=document.querySelector('#app>header h1');
+  // boton Mas + menu
+  const bm=document.createElement('button');bm.dataset.tab='mas';bm.textContent='M\u00e1s';nav.appendChild(bm);
+  const ov=document.createElement('div');ov.className='mas-ov';
+  ov.innerHTML='<div class="mas-sheet"><div class="grip"></div><div class="quien" id="masQuien"></div>'
+    +'<button data-a="importar"><span>\u2B06\uFE0F</span>Importar facturas</button>'
+    +'<button data-a="config"><span>\u2699\uFE0F</span>Configuraci\u00f3n</button>'
+    +'<button data-a="refrescar"><span>\uD83D\uDD04</span>Actualizar datos</button>'
+    +'<button data-a="full"><span>\uD83D\uDDA5</span>Ver versi\u00f3n completa</button>'
+    +'<button data-a="salir"><span>\uD83D\uDEAA</span>Salir</button></div>';
+  document.body.appendChild(ov);
+  bm.onclick=()=>{$('masQuien').textContent=(typeof CURRENT_USER!=='undefined'&&CURRENT_USER)?'Usuario: '+CURRENT_USER:'';ov.classList.add('open')};
+  ov.addEventListener('click',e=>{const b=e.target.closest('button');ov.classList.remove('open');if(!b)return;
+    const a=b.dataset.a;if(a==='importar'||a==='config')abrirModulo(a);else if(a==='refrescar')refreshNow();else if(a==='full')wfVista('full');else if(a==='salir')logout();});
+  // titulo del modulo arriba + marcar "Mas"
+  const _ai=activarInterno;
+  activarInterno=function(t){_ai(t);const act=document.querySelector('.tab.active');const id=act?act.id.replace('tab-',''):t;
+    if(h1)h1.textContent=NOMBRES[id]||'Cobranzas';bm.classList.toggle('active',id==='importar'||id==='config')};
+  if(h1)h1.textContent=NOMBRES.resumen;
+  // buscador + filtros plegables + boton flotante
+  document.querySelectorAll('.toolbar>button[onclick="openFactura()"],.toolbar>button[onclick="openCliente()"],.toolbar>button[onclick="openEfeMov()"]').forEach(b=>b.classList.add('fab'));
+  document.querySelectorAll('.toolbar').forEach(tb=>{const se=tb.querySelector('.search');if(!se)return;
+    const t=document.createElement('button');t.type='button';t.className='tb-toggle';t.innerHTML='\u2699\uFE0F Filtros';
+    se.after(t);t.onclick=()=>tb.classList.toggle('tb-open');
+    const marca=()=>{let on=false;tb.querySelectorAll('select.filter').forEach(x=>{if(x.selectedIndex>0)on=true});tb.querySelectorAll('input[type=checkbox]').forEach(x=>{if(x.checked)on=true});t.classList.toggle('on',on)};
+    tb.addEventListener('change',marca);});
+  // tarjetas que se abren al tocar (y se mantienen abiertas aunque se refresquen los datos)
+  let OPEN_C=null,OPEN_F=null;
+  const reC=()=>{if(!OPEN_C)return;document.querySelectorAll('#cockList .clicard').forEach(c=>{if(c.dataset.cid===OPEN_C)c.classList.add('open')})};
+  const reF=()=>{if(!OPEN_F)return;document.querySelectorAll('#facBody tr').forEach(r=>{if(r.dataset.fid===OPEN_F)r.classList.add('open')})};
+  const _rc=renderCockpit;renderCockpit=function(){_rc.apply(this,arguments);reC()};
+  const _rf=renderFacturas;renderFacturas=function(){_rf.apply(this,arguments);reF()};
+  $('cockList').addEventListener('click',e=>{const h=e.target.closest('.clihead');if(!h)return;const c=h.parentElement;const ab=!c.classList.contains('open');
+    document.querySelectorAll('#cockList .clicard.open').forEach(x=>x.classList.remove('open'));if(ab){c.classList.add('open');OPEN_C=c.dataset.cid}else OPEN_C=null});
+  $('facBody').addEventListener('click',e=>{if(e.target.closest('button,a'))return;const r=e.target.closest('tr');if(!r||!r.dataset.fid)return;const ab=!r.classList.contains('open');
+    document.querySelectorAll('#facBody tr.open').forEach(x=>x.classList.remove('open'));if(ab){r.classList.add('open');OPEN_F=r.dataset.fid}else OPEN_F=null});
+})();
 
 (function init(){const u=localStorage.getItem(LS.user);if(u&&Object.values(PINS).includes(u)){CURRENT_USER=u;startApp()}else $('pinInput').focus()})();
 </script>
