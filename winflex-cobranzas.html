@@ -28,7 +28,16 @@
   var esTel=!!tactil&&lado<600;
   window.WF_ES_TEL=esTel;
   if(pref==='celu'||(esTel&&pref!=='full')){document.documentElement.classList.add('celu');
-    var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content','#1b2233');}
+    var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content','#1b2233');
+    var ajusta=function(){try{
+      var sw=screen.width||0, iw=window.innerWidth||0, de=document.documentElement;
+      if(window.matchMedia&&matchMedia('(orientation:landscape)').matches)sw=Math.max(screen.width,screen.height);else sw=Math.min(screen.width,screen.height);
+      var z=(sw&&iw>sw*1.2)?(iw/sw):1;
+      de.style.zoom=z>1?z:'';
+      if(z>1){de.style.setProperty('--wfh',Math.floor(window.innerHeight/z)+'px');de.classList.add('celu-zoom')}
+      else{de.style.removeProperty('--wfh');de.classList.remove('celu-zoom')}
+    }catch(e){}};
+    ajusta();window.addEventListener('resize',ajusta);window.addEventListener('orientationchange',function(){setTimeout(ajusta,250)});}
 }catch(e){}})();
 </script>
 <style>
@@ -446,9 +455,27 @@ body.modo-modulo nav{display:none}
   html.celu #totBody td:nth-child(2)::before{content:'Oficial'}
   html.celu #totBody td:nth-child(3)::before{content:'Vencido'}
   html.celu #totBody td:nth-child(4)::before{content:'Efectivo'}
+  /* sub-pantallas de Cobranza */
+  .subnav{display:none}
+  html.celu .subnav{display:flex;background:var(--bg2);border-radius:14px;padding:4px;margin-bottom:16px}
+  html.celu .subnav button{flex:1;padding:12px 8px;border-radius:11px;font-weight:700;font-size:15px;color:var(--muted)}
+  html.celu .subnav button.on{background:var(--surface);color:var(--text);box-shadow:0 2px 6px rgba(20,30,50,.10)}
+  html.celu #tab-resumen.sub-res>#cockChips,html.celu #tab-resumen.sub-res>.toolbar,html.celu #tab-resumen.sub-res>#cockList{display:none!important}
+  html.celu #tab-resumen.sub-lis>#kpis,html.celu #tab-resumen.sub-lis>#lunesBox,html.celu #tab-resumen.sub-lis>#ncWarnBox,html.celu #tab-resumen.sub-lis>#fueraBox,html.celu #tab-resumen.sub-lis>.grid2{display:none!important}
+  html.celu .kpis .kpi[data-go]{cursor:pointer}
+  html.celu .fuera-grid{grid-template-columns:1fr;gap:8px}
+  html.celu .fuera-cell{flex-direction:row;align-items:center;gap:10px;padding:14px}
+  html.celu .fuera-cell .fl{font-size:14.5px;flex:1}
+  html.celu .fuera-cell .fv{font-size:17px}
+  html.celu .fuera-cell .fn{display:none}
+  html.celu .lunes-box{padding:16px}
+  html.celu .lunes-box .lt{font-size:15.5px}
+  html.celu .lunes-box .lm{font-size:14px;line-height:1.5}
+  html.celu .lunes-box .la .btn{padding:13px 10px;font-size:14px}
   /* modales a pantalla completa */
   html.celu .overlay{padding:0;align-items:stretch;backdrop-filter:none}
   html.celu .modal{max-width:none!important;border:none;border-radius:0;height:100vh;height:100dvh;display:flex;flex-direction:column}
+  html.celu.celu-zoom .modal{height:var(--wfh)}
   html.celu .modal header{padding:14px 16px;flex:none;background:#1b2233;color:#fff}
   html.celu .modal header h2{font-size:17px}
   html.celu .modal header .x{font-size:30px;padding:0 10px;color:#fff}
@@ -3374,6 +3401,15 @@ function wfVista(v){try{localStorage.setItem('wf_vista',v)}catch(e){}const u=new
     se.after(t);t.onclick=()=>tb.classList.toggle('tb-open');
     const marca=()=>{let on=false;tb.querySelectorAll('select.filter').forEach(x=>{if(x.selectedIndex>0)on=true});tb.querySelectorAll('input[type=checkbox]').forEach(x=>{if(x.checked)on=true});t.classList.toggle('on',on)};
     tb.addEventListener('change',marca);});
+  // Cobranza en dos pantallas: Resumen / A cobrar
+  const tr=$('tab-resumen');const sn=document.createElement('div');sn.className='subnav';
+  sn.innerHTML='<button data-s="res">Resumen</button><button data-s="lis">A cobrar</button>';tr.insertBefore(sn,tr.firstChild);
+  let SUB='';const setSub=v=>{if(v===SUB)return;SUB=v;tr.classList.toggle('sub-res',v==='res');tr.classList.toggle('sub-lis',v==='lis');sn.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.s===v));try{window.scrollTo(0,0)}catch(_){}};
+  sn.addEventListener('click',e=>{const b=e.target.closest('button');if(b)setSub(b.dataset.s)});setSub('res');
+  const _sc=setCock;setCock=function(f){_sc.apply(this,arguments);setSub('lis')};
+  const _vl=verLunes;verLunes=function(){setSub('lis');_vl.apply(this,arguments)};
+  // tocar un indicador del resumen lleva a la lista filtrada
+  $('kpis').addEventListener('click',e=>{const k=e.target.closest('.kpi');if(!k)return;if(k.classList.contains('venc'))setCock('venc');else if(k.classList.contains('tot')||k.classList.contains('por'))setCock('all')});
   // tarjetas que se abren al tocar (y se mantienen abiertas aunque se refresquen los datos)
   let OPEN_C=null,OPEN_F=null;
   const reC=()=>{if(!OPEN_C)return;document.querySelectorAll('#cockList .clicard').forEach(c=>{if(c.dataset.cid===OPEN_C)c.classList.add('open')})};
