@@ -16,6 +16,20 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+/* === MODO CELULAR: solo se activa en telefonos (tactil + lado menor < 600px). Tablets y PC no cambian. === */
+(function(){try{
+  var p=new URLSearchParams(location.search).get('vista');
+  if(p==='celu'||p==='full')localStorage.setItem('wf_vista',p);
+  if(p==='auto')localStorage.removeItem('wf_vista');
+  var pref=localStorage.getItem('wf_vista');
+  var lado=Math.min(screen.width||9999,screen.height||9999);
+  var tactil=(navigator.maxTouchPoints>0)||(window.matchMedia&&matchMedia('(pointer:coarse)').matches);
+  var esTel=!!tactil&&lado<600;
+  window.WF_ES_TEL=esTel;
+  if(pref==='celu'||(esTel&&pref!=='full'))document.documentElement.classList.add('celu');
+}catch(e){}})();
+</script>
 <style>
   :root{
     --bg:#f4f6f9; --bg2:#eef1f5; --surface:#ffffff; --surface2:#f5f7fa;
@@ -270,6 +284,113 @@ body.modo-modulo nav{display:none}
   .efe-filtro{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 13px;font-size:12.5px;margin-bottom:14px;color:var(--muted)}
   .efe-filtro strong{color:var(--text)}
   @media(max-width:760px){.efe-split{grid-template-columns:1fr}.kpis.k5{grid-template-columns:1fr 1fr}}
+
+  /* ================= MODO CELULAR (todo bajo html.celu: no afecta tablet ni PC) ================= */
+  html.celu body{font-size:13.5px}
+  html.celu input,html.celu select,html.celu textarea{font-size:16px}
+  html.celu .login-card{width:auto;max-width:340px;margin:0 16px;padding:30px 22px}
+  html.celu #app{padding:0 10px calc(86px + env(safe-area-inset-bottom,0px))}
+  html.celu header{gap:9px;padding:10px 2px}
+  html.celu header .sub{display:none}
+  html.celu header h1{font-size:14px}
+  html.celu .hlogo-img{height:26px}
+  html.celu header .right{gap:6px}
+  html.celu .who{display:none}
+  html.celu .cloud{padding:4px 8px;font-size:10.5px;max-width:110px;overflow:hidden;white-space:nowrap}
+  html.celu .icon-btn{padding:8px 10px}
+  /* barra de modulos abajo */
+  html.celu nav,html.celu body.modo-modulo nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:40;margin:0;border-radius:0;border-width:1px 0 0;gap:2px;
+    padding:4px 4px calc(4px + env(safe-area-inset-bottom,0px));overflow-x:auto;box-shadow:0 -4px 16px rgba(20,30,50,.08)}
+  html.celu nav button{flex:1 0 auto;min-width:62px;font-size:10.5px;padding:6px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;white-space:nowrap}
+  html.celu nav button::before{font-size:18px;line-height:1.1}
+  html.celu nav button[data-tab=resumen]::before{content:'\1F4CA'}
+  html.celu nav button[data-tab=facturas]::before{content:'\1F4C4'}
+  html.celu nav button[data-tab=clientes]::before{content:'\1F465'}
+  html.celu nav button[data-tab=efectivo]::before{content:'\1F4B5'}
+  html.celu nav button[data-tab=total]::before{content:'\1F9FE'}
+  html.celu nav button[data-tab=importar]::before{content:'\2B06'}
+  html.celu nav button[data-tab=config]::before{content:'\2699'}
+  html.celu .toast{bottom:calc(92px + env(safe-area-inset-bottom,0px));max-width:92vw;text-align:center}
+  /* kpis y tarjetas */
+  html.celu .kpis,html.celu .kpis.k5{grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+  html.celu .kpi{padding:11px 12px}
+  html.celu .kpi .lab{font-size:10px}
+  html.celu .kpi .val{font-size:17px;margin-top:4px}
+  html.celu .kpi .meta{font-size:10.5px}
+  html.celu .card{padding:14px}
+  html.celu .grid2,html.celu .efe-split{grid-template-columns:1fr;gap:12px}
+  html.celu .fuera-grid{grid-template-columns:1fr 1fr 1fr;gap:6px}
+  html.celu .fuera-cell{padding:9px 10px}
+  html.celu .fuera-cell .fv{font-size:14px}
+  html.celu .fuera-cell .fl{font-size:10.5px}
+  html.celu .chips{flex-wrap:nowrap;overflow-x:auto;margin:0 -10px 12px;padding:0 10px 4px;-webkit-overflow-scrolling:touch}
+  html.celu .chip{flex:none;padding:8px 12px;font-size:12.5px}
+  /* barras de herramientas */
+  html.celu .toolbar{gap:8px;margin-bottom:12px}
+  html.celu .toolbar .search{flex:1 0 100%;min-width:0}
+  html.celu .toolbar select.filter{flex:1 1 46%;min-width:0;padding:10px}
+  html.celu .toolbar .btn{flex:1 1 auto;text-align:center;justify-content:center;padding:11px 12px}
+  html.celu .toolbar label.efe-chip{flex:1 0 100%}
+  /* cockpit */
+  html.celu .clihead{flex-wrap:wrap;gap:8px;padding:12px}
+  html.celu .clihead .nm{font-size:14px}
+  html.celu .clihead .tot .s{font-size:15px}
+  html.celu .clibody{padding:2px 12px 10px}
+  html.celu .fl-side{width:100%;justify-content:space-between}
+  html.celu .cliacts{padding:10px 12px}
+  html.celu .cliacts>*{flex:1 1 auto;text-align:center;justify-content:center}
+  html.celu .mini{padding:9px 12px;font-size:13px}
+  html.celu .lunes-box .la{width:100%}
+  html.celu .lunes-box .la>*{flex:1}
+  /* tablas principales -> tarjetas */
+  html.celu table.tcards,html.celu table.tcards tbody{display:block}
+  html.celu table.tcards thead{display:none}
+  html.celu table.tcards tr{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;padding:12px 13px;border-bottom:1px solid var(--border)}
+  html.celu table.tcards tr:last-child{border-bottom:none}
+  html.celu table.tcards td,html.celu table.tcards td.hide{display:block;padding:0;border:none;text-align:left;font-size:13.5px;min-width:0}
+  html.celu table.tcards td:first-child,html.celu table.tcards td.empty{grid-column:1/-1}
+  html.celu table.tcards td.empty{padding:30px 10px;text-align:center}
+  html.celu table.tcards td::before{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--faint);font-weight:700;margin-bottom:1px}
+  html.celu table.tcards .cli-name{font-size:14.5px}
+  html.celu table.tcards .row-acts{justify-content:flex-start;flex-wrap:wrap}
+  html.celu #facBody td:nth-child(2)::before{content:'Comprobante'}
+  html.celu #facBody td:nth-child(3)::before{content:'Fecha'}
+  html.celu #facBody td:nth-child(4)::before{content:'Vence'}
+  html.celu #facBody td:nth-child(5)::before{content:'Importe'}
+  html.celu #facBody td:nth-child(6)::before{content:'Saldo'}
+  html.celu #facBody td:nth-child(7),html.celu #facBody td:nth-child(8){grid-column:1/-1}
+  html.celu #cliBody td:nth-child(2)::before{content:'Vendedor'}
+  html.celu #cliBody td:nth-child(3)::before{content:'Condici\F3n'}
+  html.celu #cliBody td:nth-child(4)::before{content:'Contacto'}
+  html.celu #cliBody td:nth-child(4){grid-column:1/-1}
+  html.celu #cliBody td:nth-child(5)::before{content:'Saldo'}
+  html.celu #cliBody td:nth-child(6){align-self:end}
+  html.celu #efeBody td:nth-child(2)::before{content:'Pendiente'}
+  html.celu #efeBody td:nth-child(3)::before{content:'% del total'}
+  html.celu #efeBody td:nth-child(4)::before{content:'D\EDas m\E1x.'}
+  html.celu #efeBody td:nth-child(5)::before{content:'\DAlt. pago'}
+  html.celu #efeBody td:nth-child(6){grid-column:1/-1}
+  html.celu #totBody td:nth-child(2)::before{content:'Oficial'}
+  html.celu #totBody td:nth-child(3)::before{content:'Vencido'}
+  html.celu #totBody td:nth-child(4)::before{content:'Efectivo'}
+  html.celu #totBody td:nth-child(5)::before{content:'Total'}
+  html.celu #totBody td:nth-child(5){font-size:15px}
+  /* tablas dentro de modales: compactas con scroll lateral */
+  html.celu .modal th,html.celu .modal td{padding:9px 8px;font-size:12.5px}
+  /* modales a pantalla completa */
+  html.celu .overlay{padding:0;align-items:stretch;backdrop-filter:none}
+  html.celu .modal{max-width:none!important;border:none;border-radius:0;height:100vh;height:100dvh;display:flex;flex-direction:column}
+  html.celu .modal header{padding:13px 16px;flex:none}
+  html.celu .modal header .x{font-size:28px;padding:0 10px}
+  html.celu .modal .body{flex:1;max-height:none;overflow:auto;padding:16px;-webkit-overflow-scrolling:touch}
+  html.celu .modal .foot{flex:none;flex-wrap:wrap;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
+  html.celu .modal .foot .btn{flex:1 1 auto;padding:13px 12px}
+  html.celu .frow{flex-direction:column;gap:0}
+  html.celu .frow .file-zone{margin-bottom:10px}
+  html.celu .field[style*="max-width"]{max-width:none!important}
+  html.celu .contact-row{flex-wrap:wrap}
+  html.celu .contact-row input,html.celu .contact-row select{flex:1 1 40%;min-width:0;font-size:16px}
+  .vista-sw{display:block;margin:26px auto 0;padding:10px 16px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:12.5px;font-weight:600}
 </style>
 </head>
 <body>
@@ -345,7 +466,7 @@ body.modo-modulo nav{display:none}
       </select>
       <button class="btn" onclick="openFactura()">+ Factura</button>
     </div>
-    <div class="tablewrap"><table>
+    <div class="tablewrap"><table class="tcards">
       <thead><tr><th>Cliente</th><th>Comprob.</th><th class="hide">Fecha</th><th>Vence</th><th class="r">Importe</th><th class="r">Saldo</th><th>Estado</th><th></th></tr></thead>
       <tbody id="facBody"></tbody>
     </table></div>
@@ -359,7 +480,7 @@ body.modo-modulo nav{display:none}
       <select class="filter" id="cliVend" onchange="renderClientes()"></select>
       <button class="btn" onclick="openCliente()">+ Cliente</button>
     </div>
-    <div class="tablewrap"><table>
+    <div class="tablewrap"><table class="tcards">
       <thead><tr><th>Cliente</th><th class="hide">Vendedor</th><th class="hide">Condición</th><th>Contacto</th><th class="r">Saldo</th><th></th></tr></thead>
       <tbody id="cliBody"></tbody>
     </table></div>
@@ -407,7 +528,7 @@ body.modo-modulo nav{display:none}
     <div id="efeFiltroInfo"></div>
     <div id="efeOcultos"></div>
     <div id="efePreview"></div>
-    <div class="tablewrap"><table>
+    <div class="tablewrap"><table class="tcards">
       <thead><tr><th>Cliente</th><th class="r" id="efeThPend">Pendiente</th><th class="r">%</th><th class="r">D&iacute;as m&aacute;x.</th><th class="r">&Uacute;lt. pago</th><th>Antig&uuml;edad</th></tr></thead>
       <tbody id="efeBody"></tbody></table></div>
     <div class="hint">Tocá un cliente para ver sus remitos y pagos. El cheque a fecha se toma como cobrado desde que lo cargás y figura aparte en “Cheques a fecha”; si rebota, marcalo como rechazado y vuelve a ser deuda. Los filtros de vendedor y producto también salen aplicados en el informe.</div>
@@ -434,7 +555,7 @@ body.modo-modulo nav{display:none}
       <button class="btn sm" onclick="openCliente(null)">+ Cliente</button>
       <button class="btn ghost sm" onclick="crearClientesFaltantes()">+ Dar de alta los que faltan</button>
     </div>
-    <div class="tablewrap"><table>
+    <div class="tablewrap"><table class="tcards">
       <thead><tr><th>Cliente</th><th class="r">Oficial</th><th class="r">Vencido</th><th class="r">Efectivo</th><th class="r">Total</th></tr></thead>
       <tbody id="totBody"></tbody></table></div>
     <div class="hint">Tocá un cliente para ver la cuenta completa: los comprobantes de la cobranza oficial y los movimientos de efectivo, uno abajo del otro.</div>
@@ -889,6 +1010,7 @@ function activarInterno(t){
 function abrirModulo(t){
   if(!MODULOS[t])return;
   if((t==='efectivo'||t==='total')&&!puedeEfectivo()){toast('No tenés acceso a ese módulo','bad');return}
+  if(document.documentElement.classList.contains('celu')){activarInterno(t);try{window.scrollTo(0,0)}catch(_){}return}
   if(ES_HIJA&&t===MODULO_VENTANA)return;
   try{
     const aw=(window.screen&&screen.availWidth)||1280,ah=(window.screen&&screen.availHeight)||800;
@@ -3128,6 +3250,13 @@ function comCSV(){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='comisiones-nitopi-'+(COM_MES||'todo')+'.csv';a.click();URL.revokeObjectURL(a.href);
 }
+
+/* --- cambio manual de vista: solo se muestra en telefonos --- */
+function wfVista(v){try{localStorage.setItem('wf_vista',v)}catch(e){}const u=new URL(location.href);u.searchParams.delete('vista');location.replace(u.toString())}
+(function(){const celu=document.documentElement.classList.contains('celu');if(!celu&&!window.WF_ES_TEL)return;
+  const b=document.createElement('button');b.className='vista-sw';
+  b.textContent=celu?'\uD83D\uDDA5 Ver versi\u00f3n completa':'\uD83D\uDCF1 Ver versi\u00f3n celular';
+  b.onclick=()=>wfVista(celu?'full':'celu');$('app').appendChild(b)})();
 
 (function init(){const u=localStorage.getItem(LS.user);if(u&&Object.values(PINS).includes(u)){CURRENT_USER=u;startApp()}else $('pinInput').focus()})();
 </script>
