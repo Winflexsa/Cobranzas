@@ -821,6 +821,14 @@ const VENDEDORES=['Matías','Enrique','Vicente','Winflex','Nitopi'];
 const PINS={'1540':'Matías','0104':'Mirta','2727':'Enrique','0204':'Georgina'};
 const CUIT_WINFLEX='30-61048777';
 const LS={bin:'wfc_bin',key:'wfc_key',user:'wfc_user',data:'wfc_data'};
+/* ===== CONEXION FIJA: pegar aca el Bin ID y la Key para que ningun equipo tenga que configurarla =====
+   KEY_ES_ACCESS=true si es una "Access Key" de JSONBin (recomendado: permisos solo Read + Update).
+   KEY_ES_ACCESS=false si es la Master Key de la cuenta. */
+const BIN_FIJO='6a0b2b196877513b27912597';
+const KEY_FIJA='$2a$10$8p4t41BnTv.9Ls.4kFLhouDMqJGQEd5LQlBYEz8n1y6nH/3dFq27G';
+const KEY_ES_ACCESS=false; // se autodetecta: si JSONBin la rechaza como Master, prueba sola como Access Key y lo recuerda
+try{ if(BIN_FIJO&&!localStorage.getItem(LS.bin))localStorage.setItem(LS.bin,BIN_FIJO);
+     if(KEY_FIJA&&!localStorage.getItem(LS.key))localStorage.setItem(LS.key,KEY_FIJA); }catch(e){}
 
 let STATE={clientes:[],comprobantes:[],efectivo:[],efeLinks:{},meta:{version:1}};
 let CURRENT_USER=null, editingCli=null, editingFac=null, cobroTarget=null, seguimientoTarget=null;
@@ -1005,14 +1013,22 @@ function saveLocal(){localStorage.setItem(LS.data,JSON.stringify(STATE))}
 function normalizeState(d){d.clientes=(d.clientes||[]).map(mapClienteIn);d.comprobantes=(d.comprobantes||d.facturas||[]).map(mapFacturaIn);d.efectivo=(d.efectivo||[]).map(mapEfectivoIn);d.efeLinks=d.efeLinks||{};d.meta=d.meta||{version:1};return d}
 function setCloud(s,t){$('cloudStatus').className='cloud '+(s==='ok'?'ok':s==='busy'?'busy':s==='bad'?'bad':'');$('cloudText').textContent=t}
 function binURL(){return 'https://api.jsonbin.io/v3/b/'+localStorage.getItem(LS.bin)}
-function binHeaders(){return {'Content-Type':'application/json','X-Master-Key':localStorage.getItem(LS.key),'X-Bin-Meta':'false'}}
+function keyTipo(){const t=localStorage.getItem('wfc_keytipo');return t||(KEY_ES_ACCESS?'access':'master')}
+function binHeaders(){const k=localStorage.getItem(LS.key);const h={'Content-Type':'application/json','X-Bin-Meta':'false'};h[keyTipo()==='access'?'X-Access-Key':'X-Master-Key']=k;return h}
+async function binFetch(url,opts){opts=opts||{};const mk=()=>Object.assign({},opts,{headers:Object.assign({},binHeaders(),opts.extra||{})});
+  let r=await fetch(url,mk());
+  if((r.status===401||r.status===403)&&!localStorage.getItem('wfc_keytipo_ok')){const otro=keyTipo()==='access'?'master':'access';const prev=localStorage.getItem('wfc_keytipo');
+    localStorage.setItem('wfc_keytipo',otro);const r2=await fetch(url,mk());
+    if(r2.ok){localStorage.setItem('wfc_keytipo_ok','1');return r2} if(prev)localStorage.setItem('wfc_keytipo',prev);else localStorage.removeItem('wfc_keytipo');}
+  else if(r.ok)localStorage.setItem('wfc_keytipo_ok','1');
+  return r}
 async function loadFromCloud(show){
   const bin=localStorage.getItem(LS.bin),key=localStorage.getItem(LS.key);
   if(!bin||!key){LOAD_OK=true;setCloud('local','Local');return}
   if(saving||savePending)return;               // no pisar un guardado en curso
   setCloud('busy','Sincronizando…');
   try{
-    const r=await fetch(binURL()+'/latest',{headers:binHeaders()});if(!r.ok)throw new Error('HTTP '+r.status);
+    const r=await binFetch(binURL()+'/latest');if(!r.ok)throw new Error('HTTP '+r.status);
     const d=await r.json();const rec=d.record||d;
     if(rec&&(rec.clientes)){
       const nube=normalizeState(rec);
@@ -1036,7 +1052,7 @@ async function saveToCloud(){
        otro mientras teníamos la pantalla abierta se conserva.          */
     let cur=null;
     try{
-      const chk=await fetch(binURL()+'/latest',{headers:binHeaders()});
+      const chk=await binFetch(binURL()+'/latest');
       if(!chk.ok)throw new Error('HTTP '+chk.status);
       const cd=await chk.json();cur=normalizeState(cd.record||cd);
     }catch(e){
@@ -1056,7 +1072,7 @@ async function saveToCloud(){
     STATE.meta=STATE.meta||{};STATE.meta.lastUpdate=NOW();STATE.meta.lastUser=CURRENT_USER;
     /* Versionado APAGADO: el bin llego al tope de 1000 versiones y JSONBin devolvia
        403 en cada guardado. Con 'false' actualiza el bin sin crear version nueva.  */
-    const r=await fetch(binURL(),{method:'PUT',headers:{...binHeaders(),'X-Bin-Versioning':'false'},body:JSON.stringify(STATE)});
+    const r=await binFetch(binURL(),{method:'PUT',extra:{'X-Bin-Versioning':'false'},body:JSON.stringify(STATE)});
     if(!r.ok){let det='';try{det=' · '+(await r.text()).slice(0,140)}catch(_){}throw new Error('HTTP '+r.status+det)}
     setBase(STATE);saveLocal();
     try{localStorage.setItem('wfc_sync',NOW())}catch(_){}   // avisa a las otras ventanas
@@ -1065,7 +1081,7 @@ async function saveToCloud(){
   }catch(e){setCloud('bad','Error al guardar: '+String(e.message||'').slice(0,40));toast('No se pudo guardar: '+e.message,'bad')}
   finally{saving=false;if(savePending){savePending=false;saveToCloud()}}
 }
-function saveConfig(){const b=$('cfgBin').value.trim(),k=$('cfgKey').value.trim();if(b)localStorage.setItem(LS.bin,b);else localStorage.removeItem(LS.bin);if(k)localStorage.setItem(LS.key,k);else localStorage.removeItem(LS.key);toast('Configuración guardada');if(b&&k)loadFromCloud(true)}
+function saveConfig(){const b=$('cfgBin').value.trim(),k=$('cfgKey').value.trim();localStorage.removeItem('wfc_keytipo');localStorage.removeItem('wfc_keytipo_ok');if(b)localStorage.setItem(LS.bin,b);else localStorage.removeItem(LS.bin);if(k)localStorage.setItem(LS.key,k);else localStorage.removeItem(LS.key);toast('Configuración guardada');if(b&&k)loadFromCloud(true)}
 function refreshNow(){loadFromCloud(true)}
 
 /* ---------- NAV ---------- */
