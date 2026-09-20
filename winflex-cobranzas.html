@@ -768,7 +768,26 @@ body.modo-modulo nav{display:none}
 <div class="overlay" id="ovEfeCli"><div class="modal" style="max-width:660px">
   <header><h2 id="efeCliTit">Cliente</h2><button class="x" onclick="closeOverlay('ovEfeCli')">&times;</button></header>
   <div class="body" id="efeCliBody"></div>
-  <div class="foot"><button class="btn ghost" onclick="closeOverlay('ovEfeCli')">Cerrar</button><button class="btn" onclick="openEfeMov(null,EFE_SEL)">+ Movimiento</button></div>
+  <div class="foot"><button class="btn ghost" onclick="closeOverlay('ovEfeCli')">Cerrar</button><button class="btn ghost" onclick="efeEnvAbrir()">&#128228; Enviar historial</button><button class="btn" onclick="openEfeMov(null,EFE_SEL)">+ Movimiento</button></div>
+</div></div>
+
+<!-- MODAL ENVIAR HISTORIAL EFECTIVO -->
+<div class="overlay" id="ovEfeEnv"><div class="modal" style="max-width:560px">
+  <header><h2 id="efeEnvTit">Enviar historial</h2><button class="x" onclick="closeOverlay('ovEfeEnv');efeEnvReset()">&times;</button></header>
+  <div class="body">
+    <div id="efeEnvAviso"></div>
+    <div class="field"><label>Qu&eacute; movimientos incluir</label><select id="efeEnvPer" onchange="efeEnvReset()">
+      <option value="">Todo el historial</option><option value="3">&Uacute;ltimos 3 meses</option><option value="6">&Uacute;ltimos 6 meses</option><option value="anio">Este a&ntilde;o</option></select></div>
+    <label style="display:flex;gap:10px;align-items:center;margin:0 0 10px;cursor:pointer"><input type="checkbox" id="efeEnvLogo" checked onchange="efeEnvReset()" style="width:20px;height:20px"> Con logo y nombre de Winflex</label>
+    <label style="display:flex;gap:10px;align-items:center;margin:0 0 16px;cursor:pointer"><input type="checkbox" id="efeEnvNotas" onchange="efeEnvReset()" style="width:20px;height:20px"> Incluir las notas de cada movimiento</label>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+      <button class="btn" style="flex:1" onclick="efeEnvGenerar('png')">&#128444; Imagen</button>
+      <button class="btn" style="flex:1" onclick="efeEnvGenerar('pdf')">&#128196; PDF</button>
+    </div>
+    <div id="efeEnvRes"></div>
+    <div class="hint">Sale con remitos, pagos, fechas, saldo corrido y el detalle de lo que queda pendiente. No muestra vendedor ni comisiones.</div>
+  </div>
+  <div class="foot"><button class="btn ghost" onclick="closeOverlay('ovEfeEnv');efeEnvReset()">Cerrar</button></div>
 </div></div>
 
 <!-- MODAL MOVIMIENTO EFECTIVO -->
@@ -2234,6 +2253,256 @@ function openEfeCli(i){
       <div class="hint">Vinculalo para que en Cuenta total las dos cuentas de este cliente se sumen juntas.</div></div>`;
   openOverlay('ovEfeCli');
 }
+
+/* ---------- ENVIAR HISTORIAL DEL CLIENTE (PDF / imagen para WhatsApp o mail) ---------- */
+let EFE_ENV={blob:null,nombre:'',tipo:'',url:null,saldo:0,cliente:''};
+function efeEnvCli(){return efeCalc().find(c=>c.nombre===EFE_SEL)||null}
+function efeEnvISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function efeEnvDesde(){
+  const v=$('efeEnvPer').value; if(!v)return null;
+  if(v==='anio')return todayISO().slice(0,4)+'-01-01';
+  const d=new Date(todayISO()+'T00:00:00'); d.setMonth(d.getMonth()-(+v)); return efeEnvISO(d);
+}
+function efeEnvAbrir(){
+  const c=efeEnvCli(); if(!c){toast('Abrí primero un cliente','bad');return}
+  $('efeEnvTit').textContent='Enviar historial · '+c.nombre;
+  $('efeEnvPer').value=''; $('efeEnvNotas').checked=false; $('efeEnvLogo').checked=true;
+  const hayCom=c.movs.some(m=>nitCom(m)>0);
+  $('efeEnvAviso').innerHTML=hayCom?`<div class="efe-alert" style="margin:0 0 14px">Ojo: este cliente tiene ventas de ${esc(NIT_VEND)} cargadas <b>netas de comisi\u00f3n</b>. En el documento los remitos salen por ese neto, que no es el precio que le cobran al cliente. Revisalo antes de mandarlo.</div>`:'';
+  efeEnvReset(); openOverlay('ovEfeEnv');
+}
+function efeEnvReset(){
+  if(EFE_ENV.url){try{URL.revokeObjectURL(EFE_ENV.url)}catch(e){}}
+  EFE_ENV={blob:null,nombre:'',tipo:'',url:null,saldo:0,cliente:''};
+  if($('efeEnvRes'))$('efeEnvRes').innerHTML='';
+}
+/* Arma los datos del documento. El saldo corrido termina igual al "Pendiente" de la app:
+   no cuentan los remitos sin entregar ni los cheques rechazados. */
+function efeEnvModelo(c,o){
+  const ab={}; c.abiertos.forEach(a=>ab[a.id]=a);
+  let acum=0, anterior=0, hayAnt=false; const filas=[];
+  c.movs.forEach(m=>{
+    const esRem=m.importe>0, noEnt=esRem&&m.entregado===false, rech=!esRem&&m.chequeOk===false;
+    const cuenta=!noEnt&&!rech;
+    if(cuenta)acum+=m.importe;
+    if(o.desde&&(m.fecha||'0000')<o.desde){anterior=acum;hayAnt=true;return}
+    let concepto,det=[],estado='',tono='';
+    if(esRem){
+      concepto=m.numero?('Remito N\u00ba '+m.numero+(m.ref?' \u00b7 '+m.ref:'')):(m.ref?('Remito \u00b7 '+m.ref):'Remito');
+      if(m.items&&m.items.length)det.push(m.items.map(x=>x.d+' '+fmt(x.i)).join('  |  '));
+      if(noEnt){estado='Sin entregar';tono='w'}
+      else if(!ab[m.id]){estado='Cancelado';tono='g'}
+      else if(ab[m.id].monto<m.importe-0.5){estado='Parcial \u00b7 resta '+fmt(ab[m.id].monto);tono='w'}
+      else {estado='Pendiente';tono='r'}
+    } else {
+      concepto='Pago'+(m.medio?' \u00b7 '+m.medio:'');
+      const nums=(m.aplic||[]).map(a=>{const r=efeList().find(x=>x.id===a.r);return r&&r.numero?'N\u00ba '+r.numero:''}).filter(Boolean);
+      if(nums.length)det.push('Aplicado a '+nums.join(', '));
+      if(rech){estado='Cheque rechazado';tono='r'}
+      else if(efeFuturo(m)&&m.chequeOk!==true){estado='Cheque a fecha';tono='w'}
+    }
+    if(o.notas&&m.nota)det.push(m.nota);
+    filas.push({fecha:m.fecha?dShow(m.fecha):'s/f',concepto,det:det.join('  \u00b7  '),
+      debe:esRem?fmt(m.importe):'',haber:esRem?'':fmt(-m.importe),saldo:cuenta?fmt(acum):'\u2014',estado,tono});
+  });
+  return {cliente:c.nombre,emitido:dShow(todayISO()),logo:o.logo,
+    periodo:o.desde?('Movimientos desde el '+dShow(o.desde)):'Historial completo',
+    anterior:hayAnt?anterior:null,filas,
+    remitado:c.remitos.reduce((s,m)=>s+m.importe,0),pagado:c.descontado,saldo:c.pendiente,
+    valores:c.valores,porEntregar:c.porEntregar,
+    abiertos:c.abiertos.map(a=>({n:a.numero?'N\u00ba '+a.numero:(a.ref||'Remito'),fecha:a.fecha?dShow(a.fecha):'s/f',dias:a.dias==null?'':a.dias+' d',monto:fmt(a.monto)}))};
+}
+function efeEnvLogoImg(){return new Promise(res=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>res(null);i.src='data:image/png;base64,'+LOGO_B64})}
+
+/* ----- PDF ----- */
+async function efeEnvPDF(M){
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js');
+  const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:'mm',format:'a4'});
+  const W=doc.internal.pageSize.getWidth();
+  const VERDE=[27,122,68],GRIS=[90,102,119],ROJO=[200,45,45],AMB=[176,110,0];
+  if(M.logo)doc.addImage('data:image/png;base64,'+LOGO_B64,'PNG',14,12,42,24);
+  doc.setFont('helvetica','bold');doc.setFontSize(19);doc.setTextColor(...VERDE);
+  doc.text('ESTADO DE CUENTA',W-14,20,{align:'right'});
+  doc.setFont('helvetica','normal');doc.setFontSize(10);doc.setTextColor(...GRIS);
+  if(M.logo)doc.text('Winflex S.A. \u00b7 Envases Especiales',W-14,26,{align:'right'});
+  doc.text('Emitido: '+M.emitido,W-14,M.logo?31:26,{align:'right'});
+  let y=M.logo?44:34;
+  doc.setDrawColor(214,222,231);doc.setFillColor(247,249,251);doc.roundedRect(14,y,W-28,18,2,2,'FD');
+  doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(25,32,45);doc.text(M.cliente,18,y+8);
+  doc.setFont('helvetica','normal');doc.setFontSize(9.5);doc.setTextColor(80,90,105);doc.text(M.periodo,18,y+14);
+  y+=24;
+  const cw=(W-28-8)/3;
+  [['Remitado',fmt(M.remitado)],['Pagado',fmt(M.pagado)],['Saldo pendiente',fmt(M.saldo)]].forEach((k,i)=>{
+    const x=14+i*(cw+4);
+    doc.setFillColor(i===2?231:247,i===2?243:249,i===2?236:251);doc.roundedRect(x,y,cw,16,2,2,'F');
+    doc.setFont('helvetica','normal');doc.setFontSize(8.5);doc.setTextColor(...GRIS);doc.text(k[0].toUpperCase(),x+4,y+6);
+    doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(...(i===2?VERDE:[25,32,45]));doc.text(k[1],x+4,y+13);
+  });
+  y+=22;
+  const body=[];
+  if(M.anterior!=null)body.push(['','Saldo anterior','','',fmt(M.anterior),'']);
+  M.filas.forEach(f=>body.push([f.fecha,f.concepto+(f.det?'\n'+f.det:''),f.debe,f.haber,f.saldo,f.estado]));
+  if(!body.length)body.push(['','Sin movimientos en el per\u00edodo','','','','']);
+  const tonos={}; M.filas.forEach((f,i)=>tonos[i+(M.anterior!=null?1:0)]=f.tono);
+  doc.autoTable({startY:y,head:[['Fecha','Concepto','Remitos','Pagos','Saldo','Estado']],body,theme:'grid',
+    styles:{fontSize:8.8,cellPadding:2,lineColor:[225,230,237],textColor:[40,46,58],overflow:'linebreak'},
+    headStyles:{fillColor:VERDE,textColor:255,fontStyle:'bold',halign:'left'},
+    alternateRowStyles:{fillColor:[247,249,251]},
+    columnStyles:{0:{cellWidth:19},2:{halign:'right',cellWidth:26},3:{halign:'right',cellWidth:26,textColor:VERDE},4:{halign:'right',cellWidth:27,fontStyle:'bold'},5:{cellWidth:31,fontSize:8}},
+    didParseCell:d=>{if(d.section==='body'&&d.column.index===5){const t=tonos[d.row.index];d.cell.styles.textColor=t==='r'?ROJO:(t==='w'?AMB:(t==='g'?VERDE:GRIS))}
+      if(d.section==='head'&&d.column.index>=2&&d.column.index<=4)d.cell.styles.halign='right'}});
+  let fy=doc.lastAutoTable.finalY+8;
+  if(M.abiertos.length){
+    if(fy>250){doc.addPage();fy=20}
+    doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(25,32,45);doc.text('Remitos pendientes de pago',14,fy+2);
+    doc.autoTable({startY:fy+5,head:[['Remito','Fecha','Antig\u00fcedad','Saldo']],body:M.abiertos.map(a=>[a.n,a.fecha,a.dias,a.monto]),theme:'grid',
+      styles:{fontSize:9,cellPadding:2,lineColor:[225,230,237],textColor:[40,46,58]},
+      headStyles:{fillColor:[90,102,119],textColor:255,fontStyle:'bold'},
+      columnStyles:{2:{halign:'center'},3:{halign:'right',fontStyle:'bold'}},margin:{right:W/2-10}});
+    fy=doc.lastAutoTable.finalY+10;
+  } else fy+=4;
+  if(fy>268){doc.addPage();fy=24}
+  doc.setFillColor(231,243,236);doc.roundedRect(W-100,fy-7,86,12,2,2,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(12);doc.setTextColor(...VERDE);
+  doc.text((M.saldo<-0.5?'SALDO A FAVOR:  '+fmt(-M.saldo):'SALDO PENDIENTE:  '+fmt(M.saldo)),W-18,fy+1,{align:'right'});
+  fy+=14;
+  doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(110,118,130);
+  const notas=[];
+  if(M.valores>0.5)notas.push('Incluye '+fmt(M.valores)+' en cheques a fecha ya descontados del saldo, todav\u00eda sin acreditar.');
+  if(M.porEntregar>0.5)notas.push('Hay '+fmt(M.porEntregar)+' en remitos todav\u00eda sin entregar, que no suman al saldo.');
+  notas.push('Ante cualquier diferencia, por favor avisanos.');
+  doc.text(notas.join(' '),14,fy,{maxWidth:W-28});
+  return doc.output('blob');
+}
+
+/* ----- IMAGEN (PNG 1080 px de ancho, pensada para WhatsApp) ----- */
+async function efeEnvPNG(M){
+  const W=1080,P=40,IN=W-2*P, F='system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif';
+  const VERDE='#1b7a44',GRIS='#5a6677',TXT='#19202d',ROJO='#c82d2d',AMB='#b06e00',LIN='#e1e6ed',ALT='#f7f9fb';
+  const COL=[{w:118,a:'left'},{w:412,a:'left'},{w:152,a:'right'},{w:152,a:'right'},{w:166,a:'right'}];
+  const mc=document.createElement('canvas').getContext('2d');
+  const wrap=(t,font,max)=>{mc.font=font;const out=[];String(t).split('\n').forEach(par=>{let l='';par.split(' ').forEach(w=>{const p=l?l+' '+w:w;if(mc.measureText(p).width<=max||!l)l=p;else{out.push(l);l=w}});out.push(l)});return out};
+  const fB='24px '+F,fBb='600 24px '+F,fD='19px '+F;
+  const filas=[]; 
+  if(M.anterior!=null)filas.push({fecha:'',cl:['Saldo anterior'],dl:[],debe:'',haber:'',saldo:fmt(M.anterior),estado:'',tono:''});
+  M.filas.forEach(f=>filas.push({fecha:f.fecha,cl:wrap(f.concepto,fBb,COL[1].w-16),dl:f.det?wrap(f.det,fD,COL[1].w-16):[],debe:f.debe,haber:f.haber,saldo:f.saldo,estado:f.estado,tono:f.tono}));
+  if(!filas.length)filas.push({fecha:'',cl:['Sin movimientos en el per\u00edodo'],dl:[],debe:'',haber:'',saldo:'',estado:'',tono:''});
+  filas.forEach(f=>{f.h=24+f.cl.length*30+f.dl.length*25+(f.estado?27:0)});
+  const hTabla=52+filas.reduce((s,f)=>s+f.h,0);
+  const hPend=M.abiertos.length?(70+M.abiertos.length*44):0;
+  const notas=[];
+  if(M.valores>0.5)notas.push('Incluye '+fmt(M.valores)+' en cheques a fecha ya descontados del saldo, todav\u00eda sin acreditar.');
+  if(M.porEntregar>0.5)notas.push('Hay '+fmt(M.porEntregar)+' en remitos todav\u00eda sin entregar, que no suman al saldo.');
+  notas.push('Ante cualquier diferencia, por favor avisanos.');
+  const nl=wrap(notas.join(' '),'20px '+F,IN);
+  const H=P+120+24+96+20+112+24+hTabla+24+hPend+84+20+nl.length*28+P;
+  if(H>15000)throw new Error('El historial es muy largo para una imagen: eleg\u00ed un per\u00edodo m\u00e1s corto o mandalo en PDF');
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;const x=cv.getContext('2d');
+  const rr=(X,Y,w,h,r,fill,stroke)=>{x.beginPath();x.moveTo(X+r,Y);x.arcTo(X+w,Y,X+w,Y+h,r);x.arcTo(X+w,Y+h,X,Y+h,r);x.arcTo(X,Y+h,X,Y,r);x.arcTo(X,Y,X+w,Y,r);x.closePath();if(fill){x.fillStyle=fill;x.fill()}if(stroke){x.strokeStyle=stroke;x.lineWidth=2;x.stroke()}};
+  const tx=(t,X,Y,font,color,al)=>{x.font=font;x.fillStyle=color;x.textAlign=al||'left';x.textBaseline='alphabetic';x.fillText(t,X,Y)};
+  x.fillStyle='#fff';x.fillRect(0,0,W,H);
+  let y=P;
+  if(M.logo){const lg=await efeEnvLogoImg();if(lg)x.drawImage(lg,P,y,194,110)}
+  tx('ESTADO DE CUENTA',W-P,y+46,'700 42px '+F,VERDE,'right');
+  if(M.logo)tx('Winflex S.A. \u00b7 Envases Especiales',W-P,y+80,'22px '+F,GRIS,'right');
+  tx('Emitido: '+M.emitido,W-P,y+(M.logo?110:80),'22px '+F,GRIS,'right');
+  y+=120+24;
+  rr(P,y,IN,96,14,ALT,LIN);
+  let nom=M.cliente;x.font='700 34px '+F;while(x.measureText(nom).width>IN-48&&nom.length>4)nom=nom.slice(0,-2);if(nom!==M.cliente)nom+='\u2026';
+  tx(nom,P+24,y+44,'700 34px '+F,TXT);tx(M.periodo,P+24,y+78,'22px '+F,GRIS);
+  y+=96+20;
+  const cw=(IN-32)/3;
+  [['REMITADO',fmt(M.remitado)],['PAGADO',fmt(M.pagado)],[M.saldo<-0.5?'SALDO A FAVOR':'SALDO PENDIENTE',fmt(Math.abs(M.saldo))]].forEach((k,i)=>{
+    const X=P+i*(cw+16);rr(X,y,cw,112,14,i===2?'#e7f3ec':ALT,null);
+    tx(k[0],X+20,y+38,'600 19px '+F,GRIS);
+    let fs=38;x.font='700 '+fs+'px '+F;while(x.measureText(k[1]).width>cw-40&&fs>22){fs-=2;x.font='700 '+fs+'px '+F}
+    tx(k[1],X+20,y+88,'700 '+fs+'px '+F,i===2?VERDE:TXT);});
+  y+=112+24;
+  // tabla
+  rr(P,y,IN,52,10,VERDE,null);x.fillStyle=VERDE;x.fillRect(P,y+26,IN,26);
+  let cx=P;['Fecha','Concepto','Remitos','Pagos','Saldo'].forEach((h,i)=>{const c=COL[i];tx(h,c.a==='right'?cx+c.w-12:cx+12,y+35,'600 21px '+F,'#fff',c.a);cx+=c.w});
+  y+=52;
+  filas.forEach((f,i)=>{
+    if(i%2){x.fillStyle=ALT;x.fillRect(P,y,IN,f.h)}
+    x.fillStyle=LIN;x.fillRect(P,y+f.h-1,IN,1);
+    let X=P,by=y+12+24;
+    tx(f.fecha,X+12,by,fB,GRIS);X+=COL[0].w;
+    let ly=by;f.cl.forEach(l=>{tx(l,X+8,ly,fBb,TXT);ly+=30});
+    f.dl.forEach(l=>{tx(l,X+8,ly-5,fD,GRIS);ly+=25});
+    if(f.estado)tx(f.estado,X+8,ly-3,'600 19px '+F,f.tono==='r'?ROJO:(f.tono==='w'?AMB:(f.tono==='g'?VERDE:GRIS)));
+    X+=COL[1].w;tx(f.debe,X+COL[2].w-12,by,fB,TXT,'right');
+    X+=COL[2].w;tx(f.haber,X+COL[3].w-12,by,fB,VERDE,'right');
+    X+=COL[3].w;tx(f.saldo,X+COL[4].w-12,by,fBb,TXT,'right');
+    y+=f.h;});
+  x.strokeStyle=LIN;x.lineWidth=2;x.strokeRect(P,y-hTabla+52,IN,hTabla-52);
+  y+=24;
+  if(M.abiertos.length){
+    tx('Remitos pendientes de pago',P,y+34,'700 26px '+F,TXT);y+=70-18;
+    M.abiertos.forEach((a,i)=>{if(!(i%2)){x.fillStyle=ALT;x.fillRect(P,y,IN,44)}
+      tx(a.n,P+12,y+30,fBb,TXT);tx(a.fecha,P+430,y+30,fB,GRIS);tx(a.dias,P+640,y+30,fB,GRIS);tx(a.monto,P+IN-12,y+30,fBb,ROJO,'right');y+=44});
+    y+=18;
+  }
+  rr(P,y,IN,64,14,'#e7f3ec',null);
+  tx(M.saldo<-0.5?'SALDO A FAVOR':'SALDO PENDIENTE',P+24,y+42,'700 24px '+F,VERDE);
+  tx(fmt(Math.abs(M.saldo)),P+IN-24,y+44,'700 34px '+F,VERDE,'right');
+  y+=84+20;
+  nl.forEach(l=>{tx(l,P,y,'20px '+F,'#6e7682');y+=28});
+  return await new Promise((res,rej)=>cv.toBlob(b=>b?res(b):rej(new Error('No se pudo generar la imagen')),'image/png'));
+}
+
+async function efeEnvGenerar(tipo){
+  const c=efeEnvCli(); if(!c){toast('Cliente no encontrado','bad');return}
+  efeEnvReset();
+  $('efeEnvRes').innerHTML='<div class="hint">Generando\u2026</div>';
+  try{
+    const M=efeEnvModelo(c,{desde:efeEnvDesde(),notas:$('efeEnvNotas').checked,logo:$('efeEnvLogo').checked});
+    const blob=tipo==='pdf'?await efeEnvPDF(M):await efeEnvPNG(M);
+    const base='Cuenta-'+c.nombre.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'_').replace(/^_|_$/g,'').slice(0,40)+'-'+todayISO();
+    EFE_ENV={blob,tipo,nombre:base+(tipo==='pdf'?'.pdf':'.png'),url:URL.createObjectURL(blob),saldo:c.pendiente,cliente:c.nombre,
+      tel:(c.oficial&&c.oficial.contactos&&(c.oficial.contactos.find(k=>k.telefono)||{}).telefono)||'',
+      mail:(c.oficial&&c.oficial.contactos&&(c.oficial.contactos.find(k=>k.email)||{}).email)||''};
+    const file=efeEnvFile();
+    const puedeShare=!!(navigator.canShare&&navigator.share&&navigator.canShare({files:[file]}));
+    const puedeCopiar=tipo==='png'&&!!(navigator.clipboard&&window.ClipboardItem);
+    const esTel=!!window.WF_ES_TEL||document.documentElement.classList.contains('celu');
+    $('efeEnvRes').innerHTML=`
+      <div class="card" style="padding:14px;background:var(--surface2)">
+        <h3 style="margin-top:0">Listo: ${esc(EFE_ENV.nombre)} <span class="cli-meta">(${Math.max(1,Math.round(blob.size/1024))} KB)</span></h3>
+        ${tipo==='png'?`<div style="max-height:300px;overflow:auto;border:1px solid var(--line,#d9dee7);border-radius:10px;background:#fff;margin-bottom:12px"><img src="${EFE_ENV.url}" style="width:100%;display:block" alt=""></div>`:''}
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${puedeShare?'<button class="btn" onclick="efeEnvCompartir()">\uD83D\uDCE4 Compartir (WhatsApp, mail\u2026)</button>':''}
+          <button class="btn ${puedeShare?'ghost':''}" onclick="efeEnvDescargar()">\u2B07\uFE0F Descargar</button>
+          ${puedeCopiar?'<button class="btn ghost" onclick="efeEnvCopiar()">\uD83D\uDCCB Copiar imagen</button>':''}
+          ${tipo==='pdf'?'<button class="btn ghost" onclick="window.open(EFE_ENV.url,\'_blank\')">\uD83D\uDC41 Ver</button>':''}
+        </div>
+        ${esTel?'':`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+          <button class="btn ghost sm" onclick="efeEnvWA()">Abrir WhatsApp${EFE_ENV.tel?' de '+esc(EFE_ENV.tel):''}</button>
+          <button class="btn ghost sm" onclick="efeEnvMail()">Abrir mail${EFE_ENV.mail?' a '+esc(EFE_ENV.mail):''}</button></div>
+          <div class="hint">En la PC el archivo queda en Descargas: abr\u00ed WhatsApp Web o el mail y adjuntalo.${puedeCopiar?' Con \u201cCopiar imagen\u201d lo peg\u00e1s directo en el chat con Ctrl+V.':''}</div>`}
+      </div>`;
+    if(!esTel)efeEnvDescargar();
+    const r=$('efeEnvRes');if(r&&r.scrollIntoView)r.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }catch(e){$('efeEnvRes').innerHTML='';toast(e.message||'No se pudo generar','bad')}
+}
+function efeEnvFile(){return new File([EFE_ENV.blob],EFE_ENV.nombre,{type:EFE_ENV.tipo==='pdf'?'application/pdf':'image/png'})}
+function efeEnvTexto(){return 'Hola, te paso el estado de cuenta al '+dShow(todayISO())+'. '+(EFE_ENV.saldo<-0.5?'Saldo a favor: '+fmt(-EFE_ENV.saldo):'Saldo pendiente: '+fmt(EFE_ENV.saldo))+'.'}
+async function efeEnvCompartir(){
+  if(!EFE_ENV.blob)return;
+  try{await navigator.share({files:[efeEnvFile()],title:'Estado de cuenta '+EFE_ENV.cliente,text:efeEnvTexto()})}
+  catch(e){if(e&&e.name!=='AbortError')toast('No se pudo compartir: descargalo y adjuntalo','bad')}
+}
+function efeEnvDescargar(){
+  if(!EFE_ENV.blob)return;
+  const a=document.createElement('a');a.href=EFE_ENV.url;a.download=EFE_ENV.nombre;document.body.appendChild(a);a.click();a.remove();
+  toast('Descargado: '+EFE_ENV.nombre,'ok');
+}
+async function efeEnvCopiar(){
+  try{await navigator.clipboard.write([new ClipboardItem({'image/png':EFE_ENV.blob})]);toast('Imagen copiada: pegala con Ctrl+V','ok')}
+  catch(e){toast('No se pudo copiar: us\u00e1 Descargar','bad')}
+}
+function efeEnvWA(){const l=waLink(EFE_ENV.tel);window.open((l||'https://wa.me/')+'?text='+encodeURIComponent(efeEnvTexto()),'_blank')}
+function efeEnvMail(){location.href='mailto:'+encodeURIComponent(EFE_ENV.mail||'')+'?subject='+encodeURIComponent('Estado de cuenta al '+dShow(todayISO()))+'&body='+encodeURIComponent(efeEnvTexto()+'\n\nAdjunto el detalle.\n\nSaludos.')}
 
 /* ---------- estado de entrega y clasificación ---------- */
 let EFE_SAVE_T=null;
