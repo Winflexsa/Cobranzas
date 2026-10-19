@@ -541,6 +541,11 @@ body.modo-modulo nav{display:none}
   .dbal{border:1px solid var(--border);border-left:3px solid var(--faint);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;font-size:12.5px}
   .dbal span{color:var(--muted);font-size:12px}
   .dbal.w{border-left-color:var(--prox)}.dbal.r{border-left-color:var(--venc)}
+  .dbaging{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--bg2);gap:2px;margin:2px 0 6px}
+  .dbaging i{display:block;height:100%}
+  .dbley{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:11.5px;color:var(--muted);margin-bottom:8px}
+  .dbley b{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
+  .dbrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--border);font-size:13px}
   @media(max-width:900px){.kpis.k5{grid-template-columns:repeat(2,1fr)}}
   html.celu nav button[data-tab=dashboard]::before{content:'\1F3E0'}
   html.celu nav button[data-tab=total]{display:none}
@@ -630,6 +635,26 @@ body.modo-modulo nav{display:none}
         <h3>Cobrado últimos 6 meses</h3>
         <div class="dbevol" id="dbEvol"></div>
         <div class="dbmore" id="dbEvolNota"></div>
+      </div>
+    </div>
+
+    <div id="dbEfe" style="display:none">
+      <div class="dbsec">💵 Efectivo (Caja 2)</div>
+      <div class="grid2">
+        <div class="card">
+          <h3>Pendiente en efectivo <button class="btn ghost sm" onclick="dbIr('efectivo')">Efectivo →</button></h3>
+          <div class="dbmini" id="dbEfeMini"></div>
+          <div class="dbaging" id="dbEfeAging"></div>
+          <div class="dbley" id="dbEfeLey"></div>
+          <table><thead><tr><th>Cliente</th><th>Más viejo</th><th class="r">Pendiente</th></tr></thead><tbody id="dbEfeBody"></tbody></table>
+          <div class="dbmore" id="dbEfeMore"></div>
+        </div>
+        <div class="card">
+          <h3>Cuenta total <button class="btn ghost sm" onclick="dbIr('total')">Cuenta total →</button></h3>
+          <div class="dbmini" id="dbTotMini"></div>
+          <div id="dbEfeCob"></div>
+          <div class="dbals" id="dbEfeAl" style="margin-top:12px;grid-template-columns:1fr"></div>
+        </div>
       </div>
     </div>
 
@@ -1393,7 +1418,59 @@ function renderDashboard(){
   if(ncMal.length) al.push(`<div class="dbal r clk" onclick="goNCsinVincular()"><b>⚠ ${_dbPl(ncMal.length,'nota')} de crédito sin vincular</b><span>No netean contra su factura</span></div>`);
   $('dbAlertas').innerHTML=al.join('');
   $('dbAlertasCard').style.display=al.length?'':'none';
+  try{renderDbEfectivo()}catch(e){console.error(e)}
 }
+/* ---------- DASHBOARD · bloque Efectivo (solo usuarios con acceso) ---------- */
+function renderDbEfectivo(){
+  const box=$('dbEfe'); if(!box)return;
+  if(!puedeEfectivo()){box.style.display='none';return}
+  box.style.display='';
+  const C=efeCalc(), hoy=_dbHoy(), ym=hoy.slice(0,7), ymAnt=_dbMesAnt(ym), dia=+hoy.slice(8);
+  const pend=C.reduce((s,c)=>s+Math.max(0,c.pendiente),0);
+  const valores=C.reduce((s,c)=>s+c.valores,0), nChq=C.reduce((s,c)=>s+c.aFecha.length,0);
+  const agg=[0,0,0,0,0]; C.forEach(c=>c.agg.forEach((v,i)=>agg[i]+=v));
+  const venc60=agg[2]+agg[3];
+  const porEnt=C.reduce((s,c)=>s+c.porEntregar,0);
+  const conSaldo=C.filter(c=>c.pendiente>0.5);
+  // cobrado en efectivo (pagos acreditados o a confirmar, sin rechazados)
+  const pg=efeList().filter(m=>m.importe<0&&m.fecha&&m.chequeOk!==false);
+  const cobMes=pg.filter(m=>m.fecha.slice(0,7)===ym&&m.fecha<=hoy).reduce((s,m)=>s-m.importe,0);
+  const cobAntMD=pg.filter(m=>m.fecha.slice(0,7)===ymAnt&&+m.fecha.slice(8)<=dia).reduce((s,m)=>s-m.importe,0);
+  // cuenta total
+  let of=0,ef=0; try{const f=totCalc(false);of=f.reduce((s,x)=>s+x.oficial,0);ef=f.reduce((s,x)=>s+x.efectivo,0)}catch(_){}
+
+  $('dbEfeMini').innerHTML=
+    _dbMini('Pendiente',fmtM(pend),_dbPl(conSaldo.length,'cliente'),'',"dbIr('efectivo')")+
+    _dbMini('Vencido +60 días',fmtM(venc60),(pend?Math.round(venc60/pend*100):0)+'% del pendiente','neg',"dbIr('efectivo')")+
+    _dbMini('Cheques a fecha',fmtM(valores),valores?_dbPl(nChq,'cheque')+' sin acreditar':'sin cheques diferidos','info',"dbIr('efectivo')");
+  const tot=agg.reduce((a,b)=>a+b,0)||1;
+  $('dbEfeAging').innerHTML=agg.map((v,i)=>v?`<i style="background:${EFE_BUCKETS[i].c};width:${v/tot*100}%" title="${EFE_BUCKETS[i].k}: ${fmt(v)}"></i>`:'').join('');
+  $('dbEfeLey').innerHTML=agg.map((v,i)=>v?`<span><b style="background:${EFE_BUCKETS[i].c}"></b>${EFE_BUCKETS[i].k} ${fmtM(v)}</span>`:'').join('');
+  const top=conSaldo.slice().sort((a,b)=>b.pendiente-a.pendiente);
+  $('dbEfeBody').innerHTML=top.length?top.slice(0,6).map(c=>{const d=c.diasMax;
+    return `<tr class="clk" onclick="dbIr('efectivo')"><td><div class="cli-name">${esc(c.nombre)}</div><div class="cli-meta">${_dbPl(c.abiertos.length,'remito')}${c.ultPago?' · últ. pago '+dShow(c.ultPago):' · sin pagos'}</div></td>
+      <td>${d!=null?`<span class="dias ${d>60?'v':d>30?'p':'f'}">${d}d</span>`:''}</td><td class="r num" style="font-weight:700">${fmt(c.pendiente)}</td></tr>`}).join('')
+    :'<tr><td colspan="3" class="dbvacio">Sin saldos en efectivo</td></tr>';
+  $('dbEfeMore').textContent=top.length>6?'+ '+(top.length-6)+' clientes más ('+fmtM(top.slice(6).reduce((s,c)=>s+c.pendiente,0))+')':'';
+
+  // cuenta total + cobrado + avisos
+  $('dbTotMini').innerHTML=
+    _dbMini('Total por cobrar',fmtM(of+ef),'oficial + efectivo','',"dbIr('total')")+
+    _dbMini('Oficial',fmtM(of),of+ef?Math.round(of/(of+ef)*100)+'%':'','',"dbIr('total')")+
+    _dbMini('Efectivo',fmtM(ef),of+ef?Math.round(ef/(of+ef)*100)+'%':'','',"dbIr('total')");
+  $('dbEfeCob').innerHTML=`<div class="dbrow"><span>Cobrado en efectivo ${_dbMesL(ym)}</span><b class="num" style="color:var(--cobr)">${fmt(cobMes)}</b></div>
+    <div class="dbrow"><span>Vs ${_dbMesL(ymAnt)} al día ${dia}</span><span class="num">${fmt(cobAntMD)} ${_dbVar(cobMes,cobAntMD)}</span></div>
+    ${porEnt>0.5?`<div class="dbrow"><span>Remitos por entregar <span class="cli-meta">(no suman)</span></span><span class="num" style="color:var(--prox)">${fmt(porEnt)}</span></div>`:''}`;
+  const al=[];
+  const nConf=C.reduce((s,c)=>s+c.chequesPorConfirmar.length,0);
+  if(nConf) al.push(`<div class="dbal w clk" onclick="dbIr('efectivo')"><b>🧾 ${_dbPl(nConf,'cheque')} vencido${nConf===1?'':'s'} sin confirmar si se acreditó</b><span>${C.filter(c=>c.chequesPorConfirmar.length).slice(0,3).map(c=>esc(c.nombre)).join(', ')}</span></div>`);
+  const rech=C.filter(c=>c.rechazados.length);
+  if(rech.length) al.push(`<div class="dbal r clk" onclick="dbIr('efectivo')"><b>⛔ Cheques rechazados</b><span>${rech.slice(0,3).map(c=>esc(c.nombre)+' '+fmtM(c.rechazados.reduce((s,m)=>s-m.importe,0))).join(' · ')}</span></div>`);
+  const sinPago=conSaldo.filter(c=>c.diasMax!=null&&c.diasMax>60&&(c.diasSinPago==null||c.diasSinPago>45));
+  if(sinPago.length) al.push(`<div class="dbal r clk" onclick="dbIr('efectivo')"><b>${_dbPl(sinPago.length,'cliente')} con remitos de +60 días y sin pagos en 45 días</b><span>${sinPago.slice(0,4).map(c=>esc(c.nombre)).join(', ')}${sinPago.length>4?'…':''}</span></div>`);
+  $('dbEfeAl').innerHTML=al.join('');
+}
+
 
 /* ---------- RESUMEN ---------- */
 function renderResumen(){
