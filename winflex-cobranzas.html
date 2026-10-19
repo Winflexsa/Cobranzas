@@ -497,6 +497,59 @@ body.modo-modulo nav{display:none}
   html.celu .contact-row input,html.celu .contact-row select{flex:1 1 40%;min-width:0;font-size:16px;padding:12px 10px}
   html.celu .seg button{padding:13px 10px;font-size:14px}
   .vista-sw{display:block;margin:26px auto 0;padding:10px 16px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:12.5px;font-weight:600}
+  /* ── Dashboard (mismo criterio que Cheques / Caja 2) ── */
+  .dbhead{margin:2px 2px 14px}.dbhead h2{font-size:22px;font-weight:800;letter-spacing:-.4px}.dbhead .s{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .dbsec{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:0 2px 8px}
+  .kpis.k5{grid-template-columns:repeat(5,1fr)}
+  #dbHero .kpi .val{font-size:21px}
+  #dbHero .kpi.dbtot{background:var(--accent);border-color:var(--accent)}
+  #dbHero .kpi.dbtot .bar{display:none}
+  #dbHero .kpi.dbtot .lab,#dbHero .kpi.dbtot .meta{color:rgba(255,255,255,.82)}
+  #dbHero .kpi.dbtot .val{color:#fff}
+  .clk{cursor:pointer}
+  #dbHero .kpi.clk:hover{border-color:var(--border2)}
+  #tab-dashboard .grid2{margin-bottom:18px}
+  #tab-dashboard .card h3{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  #tab-dashboard .card h3 .btn{text-transform:none;letter-spacing:0}
+  #tab-dashboard .card h3 .h3s{font-weight:500;text-transform:none;letter-spacing:0;color:var(--faint);font-size:12px}
+  #tab-dashboard table th{padding:8px 10px}#tab-dashboard table td{padding:9px 10px;font-size:13px}
+  .dbmini{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+  .dbmini>div{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px}
+  .dbmini>div.clk:hover{border-color:var(--border2)}
+  .dbmini .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--faint);font-weight:700}
+  .dbmini .v{font-size:16px;font-weight:800;margin-top:2px}
+  .dbmini .s{font-size:11px;color:var(--faint)}
+  .dbmini .neg{color:var(--venc)}.dbmini .warn{color:var(--prox)}.dbmini .info{color:var(--parc)}
+  .dbmore{font-size:11.5px;color:var(--faint);margin-top:8px}
+  .dbnota{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .dbvacio{text-align:center;padding:18px!important;color:var(--faint)}
+  .dbv{font-weight:700;white-space:nowrap}.dbv.up{color:var(--cobr)}.dbv.dn{color:var(--venc)}
+  .dbbar{position:relative;height:8px;background:var(--bg2);border-radius:4px;overflow:hidden}
+  .dbbar i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:4px}
+  .dbbar i.vv{background:var(--venc)}
+  .dbevol{position:relative;display:flex;gap:10px;align-items:flex-end;padding-top:6px}
+  .dbcol{flex:1;display:flex;flex-direction:column;align-items:center;min-width:0}
+  .dbcol-v{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px;white-space:nowrap}
+  .dbcol-b{width:100%;max-width:60px;height:120px;display:flex;flex-direction:column-reverse;background:var(--bg2);border-radius:8px 8px 0 0;overflow:hidden}
+  .dbcol-b i{display:block;width:100%;background:var(--accent)}
+  .dbcol.act .dbcol-b i{background:repeating-linear-gradient(45deg,var(--accent),var(--accent) 6px,#3fc181 6px,#3fc181 12px)}
+  .dbcol-l{height:22px;line-height:22px;font-size:11px;color:var(--faint);white-space:nowrap}
+  .dbcol.act .dbcol-l{color:var(--accent-d);font-weight:700}
+  .dbprom{position:absolute;left:0;right:0;border-top:1px dashed var(--faint);pointer-events:none}
+  .dbprom span{position:absolute;left:0;top:-15px;font-size:10px;color:var(--faint);background:var(--surface);padding:0 3px}
+  .dbals{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+  .dbal{border:1px solid var(--border);border-left:3px solid var(--faint);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;font-size:12.5px}
+  .dbal span{color:var(--muted);font-size:12px}
+  .dbal.w{border-left-color:var(--prox)}.dbal.r{border-left-color:var(--venc)}
+  @media(max-width:900px){.kpis.k5{grid-template-columns:repeat(2,1fr)}}
+  html.celu nav button[data-tab=dashboard]::before{content:'\1F3E0'}
+  html.celu nav button[data-tab=total]{display:none}
+  html.celu #dbHero .kpi.dbtot{background:linear-gradient(135deg,#1bb971,#0e8551);border:none}
+  html.celu .dbhead{display:none}
+  html.celu .dbmini{gap:6px}html.celu .dbmini>div{padding:7px 8px}html.celu .dbmini .v{font-size:13px}
+  html.celu #tab-dashboard .hide{display:none}
+  html.celu #tab-dashboard table td{padding:8px 6px;font-size:12.5px}
+  html.celu .dbevol{gap:5px}html.celu .dbcol-v,html.celu .dbcol-l{font-size:9.5px}
 </style>
 </head>
 <body>
@@ -525,7 +578,8 @@ body.modo-modulo nav{display:none}
   </header>
 
   <nav>
-    <button class="active" data-tab="resumen" onclick="switchTab('resumen')">Cobranza</button>
+    <button class="active" data-tab="dashboard" onclick="switchTab('dashboard')">Dashboard</button>
+    <button data-tab="resumen" onclick="switchTab('resumen')">Cobranza</button>
     <button data-tab="facturas" onclick="switchTab('facturas')">Facturas</button>
     <button data-tab="clientes" onclick="switchTab('clientes')">Clientes</button>
     <button data-tab="efectivo" id="navEfectivo" onclick="switchTab('efectivo')">Efectivo</button>
@@ -534,8 +588,56 @@ body.modo-modulo nav{display:none}
     <button data-tab="config" onclick="switchTab('config')">Config</button>
   </nav>
 
+  <!-- DASHBOARD -->
+  <section class="tab active" id="tab-dashboard">
+    <div class="dbhead"><h2>Dashboard</h2><div class="s" id="dbSub">Seguimiento de cobranzas</div></div>
+    <div class="dbsec">Cartera hoy</div>
+    <div class="kpis k5" id="dbHero"></div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>Vencido <button class="btn ghost sm" onclick="dbIr('resumen','venc')">Ir al cockpit →</button></h3>
+        <div class="dbmini" id="dbVencMini"></div>
+        <table><thead><tr><th>Cliente</th><th>Atraso</th><th class="hide">Último seguim.</th><th class="r">Vencido</th></tr></thead><tbody id="dbVencBody"></tbody></table>
+        <div class="dbmore" id="dbVencMore"></div>
+      </div>
+      <div class="card">
+        <h3>Próximos vencimientos <span class="h3s">14 días</span></h3>
+        <div class="dbmini" id="dbProxMini"></div>
+        <table><thead><tr><th>Vence</th><th></th><th>Cliente</th><th class="r">Saldo</th></tr></thead><tbody id="dbProxBody"></tbody></table>
+        <div class="dbmore" id="dbProxMore"></div>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>Proyección 4 semanas <span class="h3s">lo que vence por semana</span></h3>
+        <table><thead><tr><th>Semana</th><th class="r">Vence</th><th class="r hide">🧾 Cheques a entregar</th><th class="r">Acumulado</th></tr></thead><tbody id="dbProyBody"></tbody></table>
+        <div class="dbnota" id="dbProyNota"></div>
+      </div>
+      <div class="card">
+        <h3>Saldo por vendedor <span class="h3s"><span style="color:var(--venc)">■</span> vencido</span></h3>
+        <table><thead><tr><th>Vendedor</th><th></th><th class="r">Saldo</th><th class="r">Vencido</th></tr></thead><tbody id="dbVendBody"></tbody></table>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>Últimas cobranzas <button class="btn ghost sm" onclick="dbIr('facturas')">Facturas →</button></h3>
+        <table><thead><tr><th>Fecha</th><th>Cliente</th><th class="hide">Forma</th><th class="r">Cobrado</th></tr></thead><tbody id="dbUltBody"></tbody></table>
+      </div>
+      <div class="card">
+        <h3>Cobrado últimos 6 meses</h3>
+        <div class="dbevol" id="dbEvol"></div>
+        <div class="dbmore" id="dbEvolNota"></div>
+      </div>
+    </div>
+
+    <div class="card" id="dbAlertasCard"><h3>Para revisar</h3><div class="dbals" id="dbAlertas"></div></div>
+  </section>
+
   <!-- COBRANZA (cockpit) -->
-  <section class="tab active" id="tab-resumen">
+  <section class="tab" id="tab-resumen">
     <div class="kpis" id="kpis"></div>
     <div id="lunesBox"></div>
     <div id="ncWarnBox"></div>
@@ -1136,7 +1238,7 @@ function refreshNow(){loadFromCloud(true)}
 
 /* ---------- NAV ---------- */
 // ── NAVEGACIÓN POR VENTANAS (mismo sistema que Sueldos/Horas) ──────
-const MODULOS={resumen:'📊 Cobranza',facturas:'📄 Facturas',clientes:'👥 Clientes',efectivo:'💵 Efectivo',total:'🧾 Cuenta total',importar:'⬆ Importar',config:'⚙️ Config'};
+const MODULOS={dashboard:'🏠 Dashboard',resumen:'📊 Cobranza',facturas:'📄 Facturas',clientes:'👥 Clientes',efectivo:'💵 Efectivo',total:'🧾 Cuenta total',importar:'⬆ Importar',config:'⚙️ Config'};
 const _paramTab=(function(){try{return new URLSearchParams(location.search).get('tab');}catch(_){return null;}})();
 const MODULO_VENTANA=(_paramTab&&MODULOS[_paramTab])?_paramTab:null;
 const ES_HIJA=!!MODULO_VENTANA;
@@ -1146,7 +1248,7 @@ function activarInterno(t){
   if(document.body.classList.contains('modo-modulo')&&t!==MODULO_VENTANA){document.body.classList.remove('modo-modulo');}
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
   document.querySelectorAll('.tab').forEach(s=>s.classList.toggle('active',s.id==='tab-'+t));
-  if(t==='resumen')renderResumen();if(t==='facturas')renderFacturas();if(t==='clientes')renderClientes();if(t==='efectivo')renderEfectivo();if(t==='total')renderTotal();if(t==='config')renderStats();
+  if(t==='dashboard')renderDashboard();if(t==='resumen'){renderResumen();_dbAplicarCockPref()}if(t==='facturas')renderFacturas();if(t==='clientes')renderClientes();if(t==='efectivo')renderEfectivo();if(t==='total')renderTotal();if(t==='config')renderStats();
 }
 function abrirModulo(t){
   if(!MODULOS[t])return;
@@ -1174,6 +1276,124 @@ function goNCsinVincular(){
   toast(`${ncMal.length} NC sin vincular — corregí la Fc asociada`,'bad');
 }
 function renderAll(){renderResumen();renderFacturas();renderClientes();renderStats();renderCliList();if(puedeEfectivo()){renderEfectivo();renderTotal()}}
+
+
+/* ---------- DASHBOARD (mismo criterio que Cheques y Caja 2) ---------- */
+const _dbPl=(n,w)=>n+' '+w+(n===1?'':'s');
+const _dbMini=(l,v,s,cls,onc)=>`<div${onc?` class="clk" onclick="${onc}"`:''}><div class="l">${l}</div><div class="v num ${cls||''}">${v}</div><div class="s">${s}</div></div>`;
+const _dbISO=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const _dbHoy=()=>_dbISO(new Date());
+const _dbAdd=(iso,n)=>{const d=new Date(iso+'T12:00:00');d.setDate(d.getDate()+n);return _dbISO(d)};
+const _dbDias=iso=>Math.round((new Date(iso+'T12:00:00')-new Date(_dbHoy()+'T12:00:00'))/864e5);
+const _DBMES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const _dbMesL=ym=>_DBMES[+ym.slice(5,7)-1]+' '+ym.slice(2,4);
+const _dbMesAnt=ym=>{let a=+ym.slice(0,4),m=+ym.slice(5,7)-1;if(m<1){m=12;a--}return a+'-'+String(m).padStart(2,'0')};
+function _dbVar(a,b){if(!b)return a?'<span class="dbv up">nuevo</span>':'';const p=Math.round((a-b)/b*100);return `<span class="dbv ${p>=0?'up':'dn'}">${p>=0?'▲':'▼'} ${Math.abs(p)}%</span>`}
+const _dbCli=f=>getCliente(f.clienteId)||{razonSocial:'⚠ sin cliente'};
+const _dbVend=c=>(c&&c.vendedor)||'Winflex';
+// ir al cockpit con un filtro (en PC abre/actualiza la ventana del módulo; en celu cambia de pantalla)
+function dbIr(tab,cock){
+  if(cock){try{localStorage.setItem('wfc_cock_pref',JSON.stringify({f:cock,ts:Date.now()}))}catch(_){}}
+  if(document.documentElement.classList.contains('celu')){activarInterno(tab);if(cock&&tab==='resumen')setCock(cock);try{window.scrollTo(0,0)}catch(_){}return}
+  abrirModulo(tab);
+}
+function _dbAplicarCockPref(){try{const p=JSON.parse(localStorage.getItem('wfc_cock_pref')||'null');if(p&&p.f&&Date.now()-p.ts<60000){localStorage.removeItem('wfc_cock_pref');setCock(p.f)}}catch(_){}}
+window.addEventListener('storage',e=>{if(e.key==='wfc_cock_pref'&&e.newValue&&(!ES_HIJA||MODULO_VENTANA==='resumen'))_dbAplicarCockPref()});
+
+function renderDashboard(){
+  if(!$('dbHero'))return;
+  const hoy=_dbHoy(), ym=hoy.slice(0,7), ymAnt=_dbMesAnt(ym), dia=+hoy.slice(8);
+  const fin7=_dbAdd(hoy,7), fin30=_dbAdd(hoy,30);
+  // cartera activa (mismo criterio que la pestaña Cobranza)
+  let creditos=0;
+  const act=[], fuera={moroso:[0,0],juicio:[0,0],incobrable:[0,0]};
+  STATE.comprobantes.forEach(f=>{const s=saldoDe(f);
+    if(s<-0.5){creditos+=-s;return}
+    if(s<=0.5)return;
+    const fc=fueraCartera(f); if(fc){fuera[fc][0]+=s;fuera[fc][1]++;return}
+    act.push({f,s,v:vencimientoDe(f),d:diasDe(f),cli:_dbCli(f)});
+  });
+  const sum=a=>a.reduce((x,o)=>x+o.s,0);
+  const venc=act.filter(o=>o.d<0), sem=act.filter(o=>o.d>=0&&o.d<=7), m30=act.filter(o=>o.d>7&&o.d<=30), mas30=act.filter(o=>o.d>30);
+  const porCobrar=Math.max(0,sum(act)-creditos);
+  const cliVenc=new Set(venc.map(o=>o.f.clienteId)).size;
+  // cobranzas registradas (pagos)
+  const pagos=[];
+  STATE.comprobantes.forEach(f=>{if(isNC(f))return;(f.pagos||[]).forEach(p=>{if(p&&p.fecha&&+p.monto)pagos.push({f,p,fecha:p.fecha.slice(0,10),monto:+p.monto})})});
+  const cobMes=pagos.filter(x=>x.fecha.slice(0,7)===ym), cobAntMD=pagos.filter(x=>x.fecha.slice(0,7)===ymAnt&&+x.fecha.slice(8)<=dia), cobAnt=pagos.filter(x=>x.fecha.slice(0,7)===ymAnt);
+  const sP=a=>a.reduce((x,o)=>x+o.monto,0);
+
+  const sub=$('dbSub'); if(sub) sub.textContent='Al '+new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'})+(CURRENT_USER?' · '+CURRENT_USER:'');
+  $('dbHero').innerHTML=`
+    <div class="kpi tot dbtot clk" onclick="dbIr('resumen','all')"><div class="bar"></div><div class="lab">Por cobrar</div><div class="val num">${fmtM(porCobrar)}</div><div class="meta">${_dbPl(act.length,'comprobante')}${creditos>0.5?' · neto de '+fmtM(creditos)+' en NC':''}</div></div>
+    <div class="kpi venc clk" onclick="dbIr('resumen','venc')"><div class="bar"></div><div class="lab">Vencido</div><div class="val num" style="color:var(--venc)">${fmtM(sum(venc))}</div><div class="meta">${porCobrar?Math.round(sum(venc)/porCobrar*100):0}% del saldo · ${_dbPl(cliVenc,'cliente')}</div></div>
+    <div class="kpi por clk" onclick="dbIr('resumen','sem')"><div class="bar"></div><div class="lab">Vence esta semana</div><div class="val num">${fmtM(sum(sem))}</div><div class="meta">${_dbPl(sem.length,'comprobante')} · hasta ${dShow(fin7).slice(0,5)}</div></div>
+    <div class="kpi clk" onclick="dbIr('resumen','m30')"><div class="bar" style="background:var(--parc)"></div><div class="lab">8 a 30 días</div><div class="val num">${fmtM(sum(m30))}</div><div class="meta">${_dbPl(m30.length,'comprobante')} · después ${fmtM(sum(mas30))}</div></div>
+    <div class="kpi cobr"><div class="bar"></div><div class="lab">Cobrado ${_dbMesL(ym)}</div><div class="val num">${fmtM(sP(cobMes))}</div><div class="meta">${_dbVar(sP(cobMes),sP(cobAntMD))} vs ${_dbMesL(ymAnt)} al día ${dia} · mes completo ${fmtM(sP(cobAnt))}</div></div>`;
+
+  // ── Vencido por antigüedad + clientes a reclamar
+  const v30=venc.filter(o=>o.d>=-30), v60=venc.filter(o=>o.d<-30&&o.d>=-60), v60m=venc.filter(o=>o.d<-60);
+  $('dbVencMini').innerHTML=_dbMini('1 a 30 días',fmtM(sum(v30)),_dbPl(v30.length,'comprobante'),'warn')+_dbMini('31 a 60 días',fmtM(sum(v60)),_dbPl(v60.length,'comprobante'),'neg')+_dbMini('Más de 60 días',fmtM(sum(v60m)),_dbPl(v60m.length,'comprobante'),'neg');
+  const gv={}; venc.forEach(o=>{const k=o.f.clienteId||'_';const g=gv[k]||(gv[k]={cli:o.cli,s:0,d:0,n:0});g.s+=o.s;g.n++;if(o.d<g.d)g.d=o.d});
+  const lv=Object.values(gv).sort((a,b)=>b.s-a.s);
+  $('dbVencBody').innerHTML=lv.length?lv.slice(0,8).map(g=>{const u=ultimoSeg(g.cli);const du=u&&u.f?-_dbDias(u.f.slice(0,10)):null;
+    return `<tr class="clk" onclick="dbIr('resumen','venc')"><td><div class="cli-name">${esc(g.cli.razonSocial)}</div><div class="cli-meta">${esc(_dbVend(g.cli))}${g.n>1?' · '+g.n+' comprob.':''}</div></td><td>${diasBadge(g.d)}</td>
+      <td class="hide">${u?`<span class="cli-meta">${dShow(u.f)}${du!=null?' · hace '+du+'d':''}</span>`:'<span class="dias v">sin seguimiento</span>'}</td><td class="r num" style="font-weight:700">${fmt(g.s)}</td></tr>`}).join('')
+    :'<tr><td colspan="4" class="dbvacio">Sin vencidos 👌</td></tr>';
+  $('dbVencMore').textContent=lv.length>8?'+ '+(lv.length-8)+' clientes más con vencido ('+fmtM(lv.slice(8).reduce((a,g)=>a+g.s,0))+')':'';
+
+  // ── Próximos vencimientos
+  const prox=act.filter(o=>o.d>=0&&o.d<=14).sort((a,b)=>a.d-b.d||b.s-a.s);
+  $('dbProxMini').innerHTML=_dbMini('Esta semana',fmtM(sum(sem)),_dbPl(sem.length,'comprobante'),'warn',"dbIr('resumen','sem')")+_dbMini('8 a 30 días',fmtM(sum(m30)),_dbPl(m30.length,'comprobante'),'info',"dbIr('resumen','m30')")+_dbMini('Más de 30 días',fmtM(sum(mas30)),_dbPl(mas30.length,'comprobante'),'');
+  $('dbProxBody').innerHTML=prox.length?prox.slice(0,8).map(o=>`<tr class="clk" onclick="dbIr('resumen','sem')"><td class="num">${dShow(o.v).slice(0,5)}</td><td>${diasBadge(o.d)}</td><td><div class="cli-name">${esc(o.cli.razonSocial)}</div><div class="cli-meta">${tipoLabel(o.f.tipo)} ${esc((o.f.ptoVenta?o.f.ptoVenta+'-':'')+(o.f.numero||''))}</div></td><td class="r num" style="font-weight:700">${fmt(o.s)}</td></tr>`).join('')
+    :'<tr><td colspan="4" class="dbvacio">Nada vence en los próximos 14 días</td></tr>';
+  $('dbProxMore').textContent=prox.length>8?'+ y '+(prox.length-8)+' más en 14 días':'';
+
+  // ── Proyección 4 semanas (lo que vence + cheques a entregar)
+  const conCheq=act.map(o=>({...o,fc:fechaChequeDe(o.f)})).filter(o=>o.fc);
+  let acum=0, filas='';
+  for(let w=0;w<4;w++){const ini=_dbAdd(hoy,w*7), fin=_dbAdd(hoy,w*7+6);
+    const enR=x=>x&&x<=fin&&(w===0||x>=ini);
+    const vv=act.filter(o=>enR(o.v)&&o.d>=0), ch=conCheq.filter(o=>enR(o.fc)&&o.fc>=hoy);
+    acum+=sum(vv);
+    filas+=`<tr><td><b>${w===0?'Esta semana':'Sem. '+(w+1)}</b> <span class="cli-meta">${dShow(ini).slice(0,5)} – ${dShow(fin).slice(0,5)}</span></td><td class="r num">${vv.length?fmt(sum(vv)):'—'}<div class="cli-meta">${vv.length?_dbPl(new Set(vv.map(o=>o.f.clienteId)).size,'cliente'):''}</div></td><td class="r num hide">${ch.length?fmt(sum(ch)):'—'}<div class="cli-meta">${ch.length?_dbPl(ch.length,'comprobante'):''}</div></td><td class="r num" style="font-weight:700">${fmt(acum)}</td></tr>`}
+  $('dbProyBody').innerHTML=filas;
+  const chAtras=conCheq.filter(o=>o.fc<hoy);
+  $('dbProyNota').innerHTML=`Más el vencido sin cobrar: <b style="color:var(--venc)">${fmtM(sum(venc))}</b>`+(chAtras.length?` · 🧾 ${_dbPl(chAtras.length,'comprobante')} con cheques ya atrasados (${fmtM(sum(chAtras))}) <a href="javascript:dbIr('resumen','cheq')">ver</a>`:'');
+
+  // ── Saldo por vendedor
+  const pv={}; act.forEach(o=>{const v=_dbVend(o.cli);const x=pv[v]||(pv[v]={s:0,v:0,c:new Set()});x.s+=o.s;if(o.d<0)x.v+=o.s;x.c.add(o.f.clienteId)});
+  const lpv=Object.entries(pv).sort((a,b)=>b[1].s-a[1].s), maxV=lpv.length?lpv[0][1].s:1;
+  $('dbVendBody').innerHTML=lpv.length?lpv.map(([v,x])=>`<tr><td><div class="cli-name">${esc(v)}</div><div class="cli-meta">${_dbPl(x.c.size,'cliente')}</div></td>
+    <td style="width:34%"><div class="dbbar"><i style="width:${Math.max(2,x.s/maxV*100)}%"></i><i class="vv" style="width:${x.v/maxV*100}%"></i></div></td>
+    <td class="r num" style="font-weight:700">${fmtM(x.s)}</td><td class="r num" style="color:${x.v?'var(--venc)':'var(--faint)'}">${x.v?fmtM(x.v)+' <span class="cli-meta">('+Math.round(x.v/x.s*100)+'%)</span>':'—'}</td></tr>`).join('')
+    :'<tr><td colspan="4" class="dbvacio">Sin saldos</td></tr>';
+
+  // ── Últimas cobranzas
+  const ult=[...pagos].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,8);
+  $('dbUltBody').innerHTML=ult.length?ult.map(x=>{const c=_dbCli(x.f);const fs=[...new Set((x.p.formas||[]).map(y=>y.forma).filter(Boolean))].join(' + ');
+    return `<tr><td class="num">${dShow(x.fecha).slice(0,5)}</td><td><div class="cli-name">${esc(c.razonSocial)}</div><div class="cli-meta">${tipoLabel(x.f.tipo)} ${esc((x.f.ptoVenta?x.f.ptoVenta+'-':'')+(x.f.numero||''))}</div></td><td class="hide"><span class="cli-meta">${esc(fs||'—')}</span></td><td class="r num" style="font-weight:700;color:var(--cobr)">${fmt(x.monto)}</td></tr>`}).join('')
+    :'<tr><td colspan="4" class="dbvacio">Todavía no hay cobros registrados</td></tr>';
+
+  // ── Cobrado últimos 6 meses
+  const ms=[ym]; for(let i=0;i<5;i++) ms.unshift(_dbMesAnt(ms[0]));
+  const dat=ms.map(m=>({m,t:sP(pagos.filter(x=>x.fecha.slice(0,7)===m))}));
+  const maxM=Math.max(1,...dat.map(d=>d.t)); const prev=dat.slice(0,5).filter(d=>d.t); const prom=prev.length?prev.reduce((a,d)=>a+d.t,0)/prev.length:0;
+  $('dbEvol').innerHTML=dat.map(d=>`<div class="dbcol${d.m===ym?' act':''}" title="${_dbMesL(d.m)}: ${fmt(d.t)}"><div class="dbcol-v">${d.t?fmtM(d.t):'—'}</div><div class="dbcol-b"><i style="height:${d.t/maxM*100}%"></i></div><div class="dbcol-l">${_dbMesL(d.m)}${d.m===ym?' *':''}</div></div>`).join('')
+    +(prom?`<div class="dbprom" style="bottom:${22+prom/maxM*120}px"><span>prom. ${fmtM(prom)}</span></div>`:'');
+  $('dbEvolNota').textContent='* mes en curso · cuenta los cobros registrados en la app (con fecha de pago)';
+
+  // ── Para revisar (abajo, como en los otros tableros)
+  const al=[];
+  const sinSeg=lv.filter(g=>{const u=ultimoSeg(g.cli);return g.d<-15&&(!u||!u.f||_dbDias(u.f.slice(0,10))<-15)});
+  if(sinSeg.length) al.push(`<div class="dbal w clk" onclick="dbIr('resumen','venc')"><b>📝 ${_dbPl(sinSeg.length,'cliente')} con +15 días vencido y sin seguimiento en 15 días</b><span>${sinSeg.slice(0,4).map(g=>esc(g.cli.razonSocial)).join(', ')}${sinSeg.length>4?'…':''}</span></div>`);
+  const fT=fuera.moroso[0]+fuera.juicio[0]+fuera.incobrable[0];
+  if(fT>0.5) al.push(`<div class="dbal"><b>Fuera de cartera ${fmtM(fT)}</b><span>${[['moroso','moroso','🟠 Morosos'],['juicio','juicio','⚖️ Juicio'],['incobrable','incob','🚫 Incobrables']].filter(([k])=>fuera[k][0]>0.5).map(([k,c,l])=>`<a href="javascript:dbIr('resumen','${c}')">${l} ${fmtM(fuera[k][0])}</a>`).join(' · ')}</span></div>`);
+  const ncMal=ncSinVincular();
+  if(ncMal.length) al.push(`<div class="dbal r clk" onclick="goNCsinVincular()"><b>⚠ ${_dbPl(ncMal.length,'nota')} de crédito sin vincular</b><span>No netean contra su factura</span></div>`);
+  $('dbAlertas').innerHTML=al.join('');
+  $('dbAlertasCard').style.display=al.length?'':'none';
+}
 
 /* ---------- RESUMEN ---------- */
 function renderResumen(){
@@ -1209,6 +1429,7 @@ function renderResumen(){
   $('topDeudores').innerHTML=Object.entries(byCli).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([cid,s])=>{const c=getCliente(cid);return `
     <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="font-weight:500">${esc(c?c.razonSocial:'?')}</span><span class="num" style="font-weight:700">${fmtM(s)}</span></div>`}).join('')||'<div class="empty">Sin deudores</div>';
   renderCockpit();
+  try{renderDashboard()}catch(e){console.error(e)}
 }
 
 /* ---------- COCKPIT (vencimientos + reclamo) ---------- */
@@ -3647,7 +3868,7 @@ function wfVista(v){try{localStorage.setItem('wf_vista',v)}catch(e){}const u=new
 (function(){
   const CELU=document.documentElement.classList.contains('celu');
   if(!CELU){ if(window.WF_ES_TEL){const b=document.createElement('button');b.className='vista-sw';b.textContent='\uD83D\uDCF1 Ver versi\u00f3n celular';b.onclick=()=>wfVista('celu');$('app').appendChild(b)} return; }
-  const NOMBRES={resumen:'Cobranza',facturas:'Facturas',clientes:'Clientes',efectivo:'Efectivo',total:'Cuenta total',importar:'Importar',config:'Configuraci\u00f3n'};
+  const NOMBRES={dashboard:'Cobranzas',resumen:'Cobranza',facturas:'Facturas',clientes:'Clientes',efectivo:'Efectivo',total:'Cuenta total',importar:'Importar',config:'Configuraci\u00f3n'};
   const nav=document.querySelector('nav'), h1=document.querySelector('#app>header h1');
   // boton Mas + menu
   const bm=document.createElement('button');bm.dataset.tab='mas';bm.textContent='M\u00e1s';nav.appendChild(bm);
@@ -3666,7 +3887,7 @@ function wfVista(v){try{localStorage.setItem('wf_vista',v)}catch(e){}const u=new
   const _ai=activarInterno;
   activarInterno=function(t){_ai(t);const act=document.querySelector('.tab.active');const id=act?act.id.replace('tab-',''):t;
     if(h1)h1.textContent=NOMBRES[id]||'Cobranzas';bm.classList.toggle('active',id==='importar'||id==='config')};
-  if(h1)h1.textContent=NOMBRES.resumen;
+  if(h1)h1.textContent=NOMBRES.dashboard;
   // buscador + filtros plegables + boton flotante
   document.querySelectorAll('.toolbar>button[onclick="openFactura()"],.toolbar>button[onclick="openCliente()"],.toolbar>button[onclick="openEfeMov()"]').forEach(b=>b.classList.add('fab'));
   document.querySelectorAll('.toolbar').forEach(tb=>{const se=tb.querySelector('.search');if(!se)return;
