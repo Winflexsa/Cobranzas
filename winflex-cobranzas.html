@@ -1026,7 +1026,23 @@ function toast(msg,type=''){const t=$('toast');t.textContent=msg;t.className='to
 function tipoLabel(t){return (t||'FC_A').replace('FC_','FC ').replace('NC_','NC ').replace('FC X','Remito')}
 
 /* ---------- vencimiento / estado (compatible con app completa) ---------- */
-function getCliente(id){return STATE.clientes.find(c=>c.id===id)}
+/* ---------- ÍNDICE DE CÁLCULO (velocidad) ----------
+   Antes cada saldo recorría TODOS los comprobantes buscando NC, y cada cliente
+   se buscaba recorriendo la lista entera → el tablero tardaba ~8 s. Ahora se arma
+   un índice una vez por tarea (se descarta solo al terminar, o con idxReset()). */
+let _IDX=null;
+function idxReset(){_IDX=null}
+function _idx(){
+  const C=STATE.comprobantes,L=STATE.clientes;
+  if(_IDX&&_IDX.c===C&&_IDX.nc===C.length&&_IDX.l===L&&_IDX.nl===L.length)return _IDX;
+  const cli={},porCli={};
+  L.forEach(c=>{if(c&&c.id)cli[c.id]=c});
+  C.forEach(f=>{const k=f.clienteId||'_';(porCli[k]=porCli[k]||[]).push(f)});
+  _IDX={c:C,nc:C.length,l:L,nl:L.length,cli,porCli,link:{}};
+  setTimeout(idxReset,0);
+  return _IDX;
+}
+function getCliente(id){return _idx().cli[id]}
 function addDays(iso,d){if(!iso)return '';const x=new Date(iso.slice(0,10)+'T00:00:00');x.setDate(x.getDate()+(+d||0));return x.toISOString().slice(0,10)}
 function condicionEfectiva(f){
   const cli=getCliente(f.clienteId)||{};
@@ -1065,13 +1081,16 @@ function ncApuntaA(nc,fac){
 // factura a la que apunta una NC (mismo cliente, número asociado)
 function facturaAsociadaDe(nc){
   if(!isNC(nc)||!nc.asociadaNum)return null;
-  return STATE.comprobantes.find(x=>ncApuntaA(nc,x))||null;
+  return (_idx().porCli[nc.clienteId||'_']||[]).find(x=>ncApuntaA(nc,x))||null;
 }
 // total de NC aplicado a una factura
 function ncAplicadaA(fac){
   if(!fac||isNC(fac))return 0;
-  return STATE.comprobantes.filter(x=>ncApuntaA(x,fac))
-    .reduce((s,x)=>s+Math.max(0,(+x.importe||0)-(+x.cobrado||0)),0);
+  /* Una NC vinculada a su factura descuenta SIEMPRE su importe completo.
+     Antes se restaba lo "cobrado" de la NC: si alguien le cargaba cobrado,
+     la NC dejaba de netear y la factura volvía a aparecer con saldo (caso ALGLO). */
+  return (_idx().porCli[fac.clienteId||'_']||[]).filter(x=>ncApuntaA(x,fac))
+    .reduce((s,x)=>s+Math.max(0,+x.importe||0),0);
 }
 // NCs que declaran una factura asociada pero no la encuentran (quedan restando en silencio)
 function ncSinVincular(){return STATE.comprobantes.filter(x=>isNC(x)&&x.asociadaNum&&!facturaAsociadaDe(x))}
@@ -1118,6 +1137,7 @@ function startApp(){
   fillVendSelects();
   $('cfgBin').value=localStorage.getItem(LS.bin)||'';$('cfgKey').value=localStorage.getItem(LS.key)||'';
   loadLocal();
+  if(STATE.clientes.length){try{renderAll()}catch(e){console.error(e)}}
   if(localStorage.getItem(LS.bin)) loadFromCloud(true); else {renderAll();setCloud('local','Local')}
   setInterval(()=>{
     if(!localStorage.getItem(LS.bin)||saving)return;
@@ -1186,7 +1206,7 @@ function horaCorta(){const d=new Date();return ('0'+d.getHours()).slice(-2)+':'+
 
 /* ---------- PERSISTENCIA ---------- */
 function loadLocal(){try{const d=JSON.parse(localStorage.getItem(LS.data));if(d&&d.clientes)STATE=normalizeState(d)}catch(e){}}
-function saveLocal(){localStorage.setItem(LS.data,JSON.stringify(STATE))}
+function saveLocal(){idxReset();try{localStorage.setItem(LS.data,JSON.stringify(STATE))}catch(e){console.warn('saveLocal',e)}}
 function normalizeState(d){d.clientes=(d.clientes||[]).map(mapClienteIn);d.comprobantes=(d.comprobantes||d.facturas||[]).map(mapFacturaIn);d.efectivo=(d.efectivo||[]).map(mapEfectivoIn);d.efeLinks=d.efeLinks||{};d.meta=d.meta||{version:1};return d}
 function setCloud(s,t){$('cloudStatus').className='cloud '+(s==='ok'?'ok':s==='busy'?'busy':s==='bad'?'bad':'');$('cloudText').textContent=t}
 function binURL(){return 'https://api.jsonbin.io/v3/b/'+localStorage.getItem(LS.bin)}
@@ -1199,6 +1219,7 @@ async function binFetch(url,opts){opts=opts||{};const mk=()=>Object.assign({},op
     if(r2.ok){localStorage.setItem('wfc_keytipo_ok','1');return r2} if(prev)localStorage.setItem('wfc_keytipo',prev);else localStorage.removeItem('wfc_keytipo');}
   else if(r.ok)localStorage.setItem('wfc_keytipo_ok','1');
   return r}
+let _ULT_NUBE=null; // última respuesta cruda de la nube (para no redibujar si no cambió nada)
 async function loadFromCloud(show){
   const bin=localStorage.getItem(LS.bin),key=localStorage.getItem(LS.key);
   if(!bin||!key){LOAD_OK=true;setCloud('local','Local');return}
@@ -1206,13 +1227,16 @@ async function loadFromCloud(show){
   setCloud('busy','Sincronizando…');
   try{
     const r=await binFetch(binURL()+'/latest');if(!r.ok)throw new Error('HTTP '+r.status);
-    const d=await r.json();const rec=d.record||d;
+    const txt=await r.text();
+    const sinCambios=(BASE&&txt===_ULT_NUBE);
+    if(!sinCambios){
+    const d=JSON.parse(txt);const rec=d.record||d;
     if(rec&&(rec.clientes)){
       const nube=normalizeState(rec);
       if(!BASE) STATE=nube;                    // primera carga de la sesión: manda la nube
       else      STATE=mergeStates(STATE,nube); // después: fusión, nunca reemplazo
-      setBase(nube);saveLocal();renderAll();
-    }
+      setBase(nube);saveLocal();renderAll();_ULT_NUBE=txt;
+    }}
     LOAD_OK=true;
     setCloud('ok','En la nube · '+horaCorta());if(show===true)toast('Datos cargados de la nube','ok');
   }catch(e){LOAD_OK=false;setCloud('bad','Error de sync — guardado bloqueado, recargá');if(show===true)toast('No se pudo conectar: '+e.message+'. No se guardará hasta recargar.','bad')}
@@ -1251,7 +1275,7 @@ async function saveToCloud(){
        403 en cada guardado. Con 'false' actualiza el bin sin crear version nueva.  */
     const r=await binFetch(binURL(),{method:'PUT',extra:{'X-Bin-Versioning':'false'},body:JSON.stringify(STATE)});
     if(!r.ok){let det='';try{det=' · '+(await r.text()).slice(0,140)}catch(_){}throw new Error('HTTP '+r.status+det)}
-    setBase(STATE);saveLocal();
+    setBase(STATE);saveLocal();_ULT_NUBE=null;
     try{localStorage.setItem('wfc_sync',NOW())}catch(_){}   // avisa a las otras ventanas
     setCloud('ok','En la nube · '+horaCorta());
     if(ajenos){renderAll();toast('Guardado · se incorporaron cambios de '+((cur.meta&&cur.meta.lastUser)||'otro usuario'),'ok')}
@@ -1300,7 +1324,17 @@ function goNCsinVincular(){
   openFactura(ncMal[0].id);
   toast(`${ncMal.length} NC sin vincular — corregí la Fc asociada`,'bad');
 }
-function renderAll(){renderResumen();renderFacturas();renderClientes();renderStats();renderCliList();if(puedeEfectivo()){renderEfectivo();renderTotal()}}
+function renderAll(){
+  /* Antes dibujaba TODAS las pestañas (incluida Efectivo y Cuenta total) en cada
+     sincronización de 30 s → la app se trababa. Ahora sólo la pantalla visible;
+     cada pestaña se dibuja igual al abrirla (activarInterno). */
+  const a=document.querySelector('.tab.active'), t=a?a.id.replace('tab-',''):'dashboard';
+  const R={dashboard:renderDashboard,resumen:renderResumen,facturas:renderFacturas,clientes:renderClientes,config:renderStats,
+    efectivo:()=>{if(puedeEfectivo())renderEfectivo()},total:()=>{if(puedeEfectivo())renderTotal()}};
+  try{(R[t]||renderResumen)()}catch(e){console.error(e)}
+  if(t!=='resumen'){try{renderLunesBox()}catch(e){console.error(e)}}
+  renderCliList();
+}
 
 
 /* ---------- DASHBOARD (mismo criterio que Cheques y Caja 2) ---------- */
@@ -1325,7 +1359,7 @@ function dbIr(tab,cock){
 function _dbAplicarCockPref(){try{const p=JSON.parse(localStorage.getItem('wfc_cock_pref')||'null');if(p&&p.f&&Date.now()-p.ts<60000){localStorage.removeItem('wfc_cock_pref');setCock(p.f)}}catch(_){}}
 window.addEventListener('storage',e=>{if(e.key==='wfc_cock_pref'&&e.newValue&&(!ES_HIJA||MODULO_VENTANA==='resumen'))_dbAplicarCockPref()});
 
-function renderDashboard(){
+function renderDashboard(){idxReset();
   if(!$('dbHero'))return;
   const hoy=_dbHoy(), ym=hoy.slice(0,7), ymAnt=_dbMesAnt(ym), dia=+hoy.slice(8);
   const fin7=_dbAdd(hoy,7), fin30=_dbAdd(hoy,30);
@@ -1473,7 +1507,7 @@ function renderDbEfectivo(){
 
 
 /* ---------- RESUMEN ---------- */
-function renderResumen(){
+function renderResumen(){idxReset();
   let porCobrar=0,vencido=0,porVencer=0,cobradoTot=0,facturado=0,creditos=0;
   let morosoSaldo=0,juicioSaldo=0,incobSaldo=0,nMorC=0,nJuiC=0,nIncC=0;
   STATE.comprobantes.forEach(f=>{const imp=+f.importe||0,saldo=saldoDe(f),est=estadoDe(f);if(!isNC(f)){facturado+=imp;cobradoTot+=(imp-saldo)}
@@ -1623,7 +1657,7 @@ function saveSeguimiento(){
 }
 
 /* ---------- FACTURAS ---------- */
-function renderFacturas(){
+function renderFacturas(){idxReset();
   const q=($('facSearch').value||'').toLowerCase(),fv=$('facVend').value,fe=$('facEstado').value;
   let rows=STATE.comprobantes.map(f=>({f,cli:getCliente(f.clienteId)})).filter(({f,cli})=>{
     if(fv&&(!cli||cli.vendedor!==fv))return false;
@@ -1699,9 +1733,9 @@ function cobrarTotal(){if(!cobroTarget)return;$('cobroFormas').innerHTML='';addC
 function saveCobro(){if(!cobroTarget)return;const lines=cobroLines().filter(l=>l.monto>0);const m=lines.reduce((a,l)=>a+l.monto,0);if(m<=0){toast('Poné al menos un monto','bad');return}const imp=+cobroTarget.importe||0;const cob=(imp-saldoDe(cobroTarget))+m;cobroTarget.cobrado=cob;cobroTarget.saldo=Math.max(0,imp-cob);cobroTarget.pagos=cobroTarget.pagos||[];cobroTarget.pagos.push({fecha:$('cobroFecha').value||todayISO(),monto:m,formas:lines});if(cobroTarget.saldo<=0.5)cobroTarget.fechaCobro=$('cobroFecha').value||todayISO();cobroTarget.updatedAt=NOW();closeOverlay('ovCobro');saveToCloud();renderFacturas();renderResumen();toast('Cobro registrado','ok')}
 
 /* ---------- CLIENTES ---------- */
-function saldoCliente(id){return STATE.comprobantes.filter(f=>f.clienteId===id).reduce((s,f)=>s+saldoDe(f),0)}
+function saldoCliente(id){return (_idx().porCli[id]||[]).reduce((s,f)=>s+saldoDe(f),0)}
 function waLink(tel){const d=(tel||'').replace(/[^\d]/g,'');return d.length>=8?'https://wa.me/'+(d.startsWith('54')?d:'54'+d):''}
-function renderClientes(){
+function renderClientes(){idxReset();
   const q=($('cliSearch').value||'').toLowerCase(),fv=$('cliVend').value;
   let rows=STATE.clientes.filter(c=>{if(fv&&c.vendedor!==fv)return false;if(q&&!((c.razonSocial+' '+(c.codigo||'')+' '+(c.cuit||'')).toLowerCase().includes(q)))return false;return true}).map(c=>({c,saldo:saldoCliente(c.id)})).sort((a,b)=>b.saldo-a.saldo||a.c.razonSocial.localeCompare(b.c.razonSocial));
   $('cliBody').innerHTML=rows.length?rows.map(({c,saldo})=>{const ct=(c.contactos&&c.contactos[0])||{};const wa=waLink(ct.telefono);
@@ -2283,6 +2317,11 @@ function efeMatchOficial(nombre){
 
 /* ---------- cálculo ---------- */
 function efeCalc(){
+  const ix=_idx();
+  if(ix.efe&&ix.efeArr===efeList()&&ix.efeN===efeList().length)return ix.efe;
+  const r=_efeCalc(); ix.efe=r; ix.efeArr=efeList(); ix.efeN=efeList().length; return r;
+}
+function _efeCalc(){
   const hoy=todayISO(), by={};
   efeList().forEach(m=>{const k=m.cliente||'(sin cliente)';(by[k]=by[k]||[]).push(m)});
   return Object.keys(by).map(nombre=>{
@@ -2338,7 +2377,7 @@ function efeVivo(c){
     || (c.rechazados||[]).length>0
     || (c.sinAplicar>0.5 && c.remitos.length>0);
 }
-function renderEfectivo(){
+function renderEfectivo(){idxReset();
   if(!$('efeBody'))return;
   const C=efeCalc();
   const total=C.reduce((s,c)=>s+Math.max(0,c.pendiente),0);
@@ -3069,10 +3108,13 @@ function efeLinks(){if(!STATE.efeLinks)STATE.efeLinks={};return STATE.efeLinks}
 function efeLinkDe(nombre){
   const L=efeLinks();
   if(Object.prototype.hasOwnProperty.call(L,nombre))return L[nombre]||null;
+  const memo=_idx().link;
+  if(Object.prototype.hasOwnProperty.call(memo,nombre))return memo[nombre];
   const m=efeMatchOficial(nombre);
-  return m?m.id:null;
+  return (memo[nombre]=m?m.id:null);
 }
 function setEfeLink(nombre,val){
+  idxReset();
   const L=efeLinks();
   if(val==='__auto__')delete L[nombre];
   else if(val==='__none__')L[nombre]=null;
@@ -3093,14 +3135,15 @@ function efeLinkSelect(nombre){
 
 /* vencido de la cartera oficial de un cliente */
 function vencidoCliente(id){
-  return STATE.comprobantes.filter(f=>f.clienteId===id&&!isNC(f))
+  return (_idx().porCli[id]||[]).filter(f=>!isNC(f))
     .reduce((s,f)=>{const e=estadoDe(f);return s+((e==='vencida'||e==='parcial-venc')?saldoDe(f):0)},0);
 }
 
 function totCalc(todos){
-  const efe=efeCalc(), usados=new Set(), filas=[];
+  const efe=efeCalc(), usados=new Set(), filas=[], porLink={};
+  efe.forEach(e=>{const k=efeLinkDe(e.nombre);if(k)(porLink[k]=porLink[k]||[]).push(e)});
   STATE.clientes.forEach(c=>{
-    const míos=efe.filter(e=>efeLinkDe(e.nombre)===c.id);
+    const míos=porLink[c.id]||[];
     míos.forEach(e=>usados.add(e.nombre));
     const oficial=saldoCliente(c.id);
     const efectivo=míos.reduce((s,e)=>s+e.pendiente,0);
@@ -3117,7 +3160,7 @@ function totCalc(todos){
   return filas;
 }
 
-function renderTotal(){
+function renderTotal(){idxReset();
   if(!$('totBody'))return;
   const filas=totCalc($('totFiltro').value==='todos');
   const of=filas.reduce((s,f)=>s+f.oficial,0);
